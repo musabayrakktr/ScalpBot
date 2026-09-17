@@ -8,11 +8,12 @@ import yfinance as yf
 import pandas as pd
 import ta
 
-# --- BAKIYE VE RISK AYARLARI ---
-HESAP_BAKIYESI = 1000.0  # Varsayılan $1000 bakiye
-RISK_YUZDESI = 0.01     # %1 Risk
+# --- BAKIYE, RISK VE OTO-TRADE AYARLARI ---
+HESAP_BAKIYESI = 1000.0   # Varsayılan $1000 bakiye
+RISK_YUZDESI = 0.01      # %1 Risk
+AUTO_TRADE_AKTIF = False # Varsayılan kapalı (Sadece Sinyal)
 
-# --- RENDER WEB SUNUCUSU VE WEBHOOK ---
+# --- RENDER WEB SUNUCUSU VE WEBHOOK (MT4/MT5 BRİDGE İÇİN) ---
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -64,6 +65,7 @@ def telegram_komutlari_ayarla():
             {"command": "start", "description": "🚀 Kontrol Paneli & Bilgi"},
             {"command": "fiyat", "description": "📊 Canlı Fiyatlar & RSI"},
             {"command": "durum", "description": "⚡ Bot Çalışma Durumu"},
+            {"command": "oto", "description": "🤖 Oto Al-Sat Aç/Kapat (/oto ac veya /oto kapat)"},
             {"command": "tv", "description": "🌐 TradingView Grafikleri"},
             {"command": "bakiye", "description": "💰 Bakiye Güncelle (Örn: /bakiye 2000)"}
         ]
@@ -101,6 +103,9 @@ def lot_hesapla(fiyat, sl, ticker_symbol):
     return max(lot, 0.01)
 
 def metatrader_signal_gonder(signal_data):
+    """ MetaTrader EA / Auto-Trade Köprüsüne Sinyal İletimi """
+    if not AUTO_TRADE_AKTIF:
+        return
     try:
         url = "http://127.0.0.1:10000/webhook"
         requests.post(url, json=signal_data, timeout=2)
@@ -143,7 +148,8 @@ def borsa_acilis_kontrol():
             ACILIS_UYARI_NY = False
 
 def anlik_durum_raporu():
-    rapor = f"📊 *CANLI PARİTE VE RSI DURUMU*\n💰 *Aktif Bakiye:* `${HESAP_BAKIYESI}` (%1 Risk Modu)\n\n"
+    oto_durum = "🟢 AÇIK (Auto-Trade)" if AUTO_TRADE_AKTIF else "🔴 KAPALI (Sadece Sinyal)"
+    rapor = f"📊 *CANLI PARİTE VE RSI DURUMU*\n💰 *Kasa:* `${HESAP_BAKIYESI}` | 🤖 *Oto-Trade:* {oto_durum}\n\n"
     for ticker, isim_tuple in FOREX_PARITELERI.items():
         isim, _ = isim_tuple
         try:
@@ -158,7 +164,7 @@ def anlik_durum_raporu():
     return rapor
 
 def telegram_komut_dinleyici():
-    global LAST_UPDATE_ID, HESAP_BAKIYESI
+    global LAST_UPDATE_ID, HESAP_BAKIYESI, AUTO_TRADE_AKTIF
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
     
     while True:
@@ -171,18 +177,31 @@ def telegram_komut_dinleyici():
                     if "message" in update and "text" in update["message"]:
                         text = update["message"]["text"].strip()
                         if text in ["/start", "/menu", "menu"]:
+                            oto_str = "🟢 AÇIK" if AUTO_TRADE_AKTIF else "🔴 KAPALI"
                             telegram_mesaj_gonder(
-                                f"🤖 *ScalpBot ULTIMATE Kontrol Paneli*\n\n💰 *Aktif Kasa:* `${HESAP_BAKIYESI}`\n\nSol alt köşedeki **Menu** butonuna basarak canlı fiyatları, bot durumunu ve grafik linklerini sorgulayabilirsiniz."
+                                f"🤖 *ScalpBot ULTIMATE Kontrol Paneli*\n\n💰 *Aktif Kasa:* `${HESAP_BAKIYESI}`\n🤖 *Oto Al-Sat Modu:* {oto_str}\n\nSol alt köşedeki **Menu** butonuna basarak komutları kullanabilirsiniz."
                             )
                         elif text in ["/fiyat", "/analiz"]:
                             telegram_mesaj_gonder(anlik_durum_raporu())
                         elif text == "/durum":
-                            telegram_mesaj_gonder(f"⚡ *Bot Durumu:* Aktif 🟢\n💰 Kasa Bakiyesi: `${HESAP_BAKIYESI}`\n🛡️ Haber, Volatilite & Auto-Trade Altyapısı: Aktif")
+                            oto_str = "🟢 AÇIK" if AUTO_TRADE_AKTIF else "🔴 KAPALI"
+                            telegram_mesaj_gonder(f"⚡ *Bot Durumu:* Aktif 🟢\n💰 Kasa Bakiyesi: `${HESAP_BAKIYESI}`\n🤖 Otomatik Al-Sat: {oto_str}\n🛡️ Haber & Volatilite Filtresi: Aktif")
                         elif text == "/tv":
                             links = "🌐 *TRADINGVIEW CANLI GRAFİK LİNKLERİ*\n\n"
                             for _, (isim, tv_sym) in FOREX_PARITELERI.items():
                                 links += f"📌 [{isim} Grafiğini Aç](https://www.tradingview.com/chart/?symbol={tv_sym})\n"
                             telegram_mesaj_gonder(links)
+                        elif text.startswith("/oto"):
+                            parca = text.split()
+                            if len(parca) > 1 and parca[1].lower() in ["ac", "aç", "on"]:
+                                AUTO_TRADE_AKTIF = True
+                                telegram_mesaj_gonder("🤖 *Otomatik Al-Sat Modu AKTİF Edildi!* 🟢\n\nArtık üretilen sinyaller anında MetaTrader hesabınıza iletilip otomatik açılacaktır.")
+                            elif len(parca) > 1 and parca[1].lower() in ["kapat", "off"]:
+                                AUTO_TRADE_AKTIF = False
+                                telegram_mesaj_gonder("📲 *Otomatik Al-Sat Modu KAPATILDI!* 🔴\n\nBot sadece Telegram'a sinyal ve analiz göndermeye devam edecektir.")
+                            else:
+                                dur = "AÇIK 🟢" if AUTO_TRADE_AKTIF else "KAPALI 🔴"
+                                telegram_mesaj_gonder(f"🤖 Oto Al-Sat Şu an: *{dur}*\n\nKullanım:\n`/oto ac` -> Otomatiği açar\n`/oto kapat` -> Otomatiği kapatır")
                         elif text.startswith("/bakiye"):
                             try:
                                 yeni_bakiye = float(text.split()[1])
@@ -242,6 +261,7 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
 
         simdi_tsi = datetime.now(timezone.utc) + timedelta(hours=3)
         hacim_etiketi = " 🔥 *[YÜKSEK HACİM]*" if simdi_tsi.hour in [10, 11, 15, 16, 17] else ""
+        oto_etiket = " 🤖 *[OTO İŞLEM İLETİLDİ]*" if AUTO_TRADE_AKTIF else ""
 
         if al_kosulu:
             sl = round(fiyat * (1 - sl_rate), 4)
@@ -251,7 +271,7 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
             önerilen_lot = lot_hesapla(fiyat, sl, ticker_symbol)
 
             mesaj = (
-                f"🚨 *PRO SCALP SİNYALİ (LONG / AL)*{hacim_etiketi} 🚨\n\n"
+                f"🚨 *PRO SCALP SİNYALİ (LONG / AL)*{hacim_etiketi}{oto_etiket} 🚨\n\n"
                 f"📌 *Parite:* {isim}\n"
                 f"🟢 *Giriş Fiyatı:* `{fiyat}`\n"
                 f"💵 *Önerilen Lot (%1 Risk):* `{önerilen_lot} Lot`\n\n"
@@ -282,7 +302,7 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
             önerilen_lot = lot_hesapla(fiyat, sl, ticker_symbol)
 
             mesaj = (
-                f"🚨 *PRO SCALP SİNYALİ (SHORT / SAT)*{hacim_etiketi} 🚨\n\n"
+                f"🚨 *PRO SCALP SİNYALİ (SHORT / SAT)*{hacim_etiketi}{oto_etiket} 🚨\n\n"
                 f"📌 *Parite:* {isim}\n"
                 f"🔴 *Satış Fiyatı:* `{fiyat}`\n"
                 f"💵 *Önerilen Lot (%1 Risk):* `{önerilen_lot} Lot`\n\n"
@@ -316,7 +336,7 @@ threading.Thread(target=telegram_komut_dinleyici, daemon=True).start()
 telegram_komutlari_ayarla()
 
 # Başlangıç Bildirimi
-telegram_mesaj_gonder("🚀 *ScalpBot PRO Aktif!*\nSohbet görünümü sadeleştirildi. Sol alt menüden komutları kullanabilirsiniz.")
+telegram_mesaj_gonder("🚀 *ScalpBot PRO Auto-Trade Ready Aktif!*\n`/oto ac` ve `/oto kapat` komutlarıyla otomatik al-sat modunu yönetebilirsiniz.")
 
 # Ana Döngü
 while True:
