@@ -13,6 +13,9 @@ HESAP_BAKIYESI = 3000.0   # $3000 demo bakiyenle eşitledik
 RISK_YUZDESI = 0.01      # %1 Risk
 AUTO_TRADE_AKTIF = False # Varsayılan kapalı (Sadece Sinyal)
 
+# --- CANLI İŞLEM VE TP/SL TAKİP SÖZLÜĞÜ ---
+AKTIF_ISLEMLER = {}
+
 # --- RENDER WEB SUNUCUSU VE WEBHOOK ---
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -115,9 +118,10 @@ def metatrader_signal_gonder(signal_data):
         print(f"Auto-Trade Webhook İletim Hatası: {e}")
 
 def haber_filtresi_aktif_mi():
+    """ Esnetilmiş Haber Filtresi (Sadece saat başı öncesi/sonrası 5'er dk esneklik) """
     simdi = datetime.now(timezone.utc)
     dakika = simdi.minute
-    if (50 <= dakika <= 59) or (0 <= dakika <= 10) or (20 <= dakika <= 40):
+    if (55 <= dakika <= 59) or (0 <= dakika <= 5):
         return False
     return True
 
@@ -148,6 +152,45 @@ def borsa_acilis_kontrol():
     else:
         if saat != 15:
             ACILIS_UYARI_NY = False
+
+def tp_sl_kontrol_et(ticker_symbol, anlik_fiyat, isim):
+    """ Aktif pozisyonların TP/SL hedeflerini kontrol edip Telegram bildirimi atar """
+    if ticker_symbol not in AKTIF_ISLEMLER:
+        return
+
+    islem = AKTIF_ISLEMLER[ticker_symbol]
+    yon = islem['yon']
+    entry = islem['entry']
+
+    if yon == 'BUY':
+        if anlik_fiyat >= islem['tp1'] and not islem.get('tp1_hit'):
+            islem['tp1_hit'] = True
+            telegram_mesaj_gonder(f"🎯 *TP1 HEDEFİ GELDİ!* 🎉\n📌 *Parite:* {isim}\n💰 *Anlık Fiyat:* `{anlik_fiyat}`\n💡 *Öneri:* Stop Loss seviyesini giriş fiyatına (`{entry}`) çekin!")
+        elif anlik_fiyat >= islem['tp2'] and not islem.get('tp2_hit'):
+            islem['tp2_hit'] = True
+            telegram_mesaj_gonder(f"🚀 *TP2 HEDEFİ GELDİ!* 🔥\n📌 *Parite:* {isim}\n💰 *Anlık Fiyat:* `{anlik_fiyat}`\n💡 *Kârın çoğunu realize edebilirsiniz.*")
+        elif anlik_fiyat >= islem['tp3'] and not islem.get('tp3_hit'):
+            islem['tp3_hit'] = True
+            telegram_mesaj_gonder(f"🔥 *TP3 MAKSİMUM HEDEF GELDİ!* 🏆\n📌 *Parite:* {isim}\n💰 *Anlık Fiyat:* `{anlik_fiyat}`\n✅ *Pozisyon başarıyla tamamlandı!*")
+            del AKTIF_ISLEMLER[ticker_symbol]
+        elif anlik_fiyat <= islem['sl']:
+            telegram_mesaj_gonder(f"🔴 *STOP LOSS TETİKLENDİ!* 🛑\n📌 *Parite:* {isim}\n📉 *Fiyat:* `{anlik_fiyat}`\n⚠️ *İşlem zararla kapatıldı.*")
+            del AKTIF_ISLEMLER[ticker_symbol]
+
+    elif yon == 'SELL':
+        if anlik_fiyat <= islem['tp1'] and not islem.get('tp1_hit'):
+            islem['tp1_hit'] = True
+            telegram_mesaj_gonder(f"🎯 *TP1 HEDEFİ GELDİ!* 🎉\n📌 *Parite:* {isim}\n💰 *Anlık Fiyat:* `{anlik_fiyat}`\n💡 *Öneri:* Stop Loss seviyesini giriş fiyatına (`{entry}`) çekin!")
+        elif anlik_fiyat <= islem['tp2'] and not islem.get('tp2_hit'):
+            islem['tp2_hit'] = True
+            telegram_mesaj_gonder(f"🚀 *TP2 HEDEFİ GELDİ!* 🔥\n📌 *Parite:* {isim}\n💰 *Anlık Fiyat:* `{anlik_fiyat}`\n💡 *Kârın çoğunu realize edebilirsiniz.*")
+        elif anlik_fiyat <= islem['tp3'] and not islem.get('tp3_hit'):
+            islem['tp3_hit'] = True
+            telegram_mesaj_gonder(f"🔥 *TP3 MAKSİMUM HEDEF GELDİ!* 🏆\n📌 *Parite:* {isim}\n💰 *Anlık Fiyat:* `{anlik_fiyat}`\n✅ *Pozisyon başarıyla tamamlandı!*")
+            del AKTIF_ISLEMLER[ticker_symbol]
+        elif anlik_fiyat >= islem['sl']:
+            telegram_mesaj_gonder(f"🔴 *STOP LOSS TETİKLENDİ!* 🛑\n📌 *Parite:* {isim}\n📈 *Fiyat:* `{anlik_fiyat}`\n⚠️ *İşlem zararla kapatıldı.*")
+            del AKTIF_ISLEMLER[ticker_symbol]
 
 def anlik_durum_raporu():
     oto_durum = "🟢 AÇIK (Auto-Trade)" if AUTO_TRADE_AKTIF else "🔴 KAPALI (Sadece Sinyal)"
@@ -221,14 +264,20 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
     isim, tv_symbol = isim_tuple
     suan = time.time()
 
-    if ticker_symbol in SON_SINYALLER and (suan - SON_SINYALLER[ticker_symbol]) < COOLDOWN_SURESI:
-        return
-
     try:
         ticker = yf.Ticker(ticker_symbol)
         df = ticker.history(period="1d", interval=TIMEFRAME)
 
         if df.empty or len(df) < 35:
+            return
+
+        fiyat = round(df['Close'].iloc[-1], 4)
+
+        # Aktif pozisyon varsa TP/SL seviyelerini kontrol et
+        tp_sl_kontrol_et(ticker_symbol, fiyat, isim)
+
+        # Cooldown kontrolü (Yeni sinyal için)
+        if ticker_symbol in SON_SINYALLER and (suan - SON_SINYALLER[ticker_symbol]) < COOLDOWN_SURESI:
             return
 
         df['EMA_Fast'] = ta.trend.ema_indicator(df['Close'], window=9)
@@ -240,7 +289,6 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
         son = df.iloc[-1]
         onceki = df.iloc[-2]
 
-        fiyat = round(son['Close'], 4)
         rsi = round(son['RSI'], 2)
 
         al_kosulu = (
@@ -284,6 +332,15 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
             )
             telegram_mesaj_gonder(mesaj)
             
+            # Canlı TP/SL Takip Sözlüğüne Ekle
+            AKTIF_ISLEMLER[ticker_symbol] = {
+                'yon': 'BUY',
+                'entry': fiyat,
+                'tp1': tp1, 'tp2': tp2, 'tp3': tp3,
+                'sl': sl,
+                'tp1_hit': False, 'tp2_hit': False, 'tp3_hit': False
+            }
+
             metatrader_signal_gonder({
                 "action": "BUY",
                 "symbol": isim,
@@ -315,6 +372,15 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
             )
             telegram_mesaj_gonder(mesaj)
 
+            # Canlı TP/SL Takip Sözlüğüne Ekle
+            AKTIF_ISLEMLER[ticker_symbol] = {
+                'yon': 'SELL',
+                'entry': fiyat,
+                'tp1': tp1, 'tp2': tp2, 'tp3': tp3,
+                'sl': sl,
+                'tp1_hit': False, 'tp2_hit': False, 'tp3_hit': False
+            }
+
             metatrader_signal_gonder({
                 "action": "SELL",
                 "symbol": isim,
@@ -338,7 +404,7 @@ threading.Thread(target=telegram_komut_dinleyici, daemon=True).start()
 telegram_komutlari_ayarla()
 
 # Başlangıç Bildirimi
-telegram_mesaj_gonder("🚀 *ScalpBot Sistem Yeniden Başlatıldı!*\nKomut dinleyici ve sinyal taraması kesintisiz aktif.")
+telegram_mesaj_gonder("🚀 *ScalpBot Sistem Yeniden Başlatıldı!*\nKomut dinleyici, TP/SL canlı takibi ve sinyal taraması kesintisiz aktif.")
 
 # Ana Döngü
 while True:
