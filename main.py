@@ -1,6 +1,7 @@
 import time
 import requests
 import threading
+from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import yfinance as yf
 import pandas as pd
@@ -12,7 +13,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-type', 'text/html')
         self.end_headers()
-        self.wfile.write(b"ScalpBot Pro & Telegram Menu Aktif!")
+        self.wfile.write(b"ScalpBot Pro Ultimate Aktif!")
 
 def run_web_server():
     server_address = ('', 10000)
@@ -35,6 +36,21 @@ TIMEFRAME = "5m"
 SON_SINYALLER = {}
 COOLDOWN_SURESI = 900  # 15 Dakika
 LAST_UPDATE_ID = 0
+GUNLUK_SINYAL_SAYISI = 0
+RAPOR_GONDERILDI = False
+
+def telegram_komutlari_ayarla():
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/setMyCommands"
+        commands = [
+            {"command": "start", "description": "🚀 Kontrol Paneli & Menü"},
+            {"command": "fiyat", "description": "📊 Canlı Fiyatlar & RSI"},
+            {"command": "durum", "description": "⚡ Bot Çalışma Durumu"},
+            {"command": "tv", "description": "🌐 TradingView Grafikleri"}
+        ]
+        requests.post(url, json={"commands": commands})
+    except Exception as e:
+        print(f"Komut Set Hatası: {e}")
 
 def telegram_mesaj_gonder(mesaj, keyboard=None):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -65,6 +81,20 @@ def ana_menu_keyboard():
         ]
     }
 
+def haber_filtresi_aktif_mi():
+    simdi = datetime.now(timezone.utc)
+    dakika = simdi.minute
+    if (50 <= dakika <= 59) or (0 <= dakika <= 10) or (20 <= dakika <= 40):
+        return False
+    return True
+
+def hafta_sonu_mu():
+    simdi = datetime.now(timezone.utc)
+    weekday = simdi.weekday()
+    if weekday == 5 or (weekday == 4 and simdi.hour >= 22) or (weekday == 6 and simdi.hour < 22):
+        return True
+    return False
+
 def anlik_durum_raporu():
     rapor = "📊 *CANLI PARİTE VE RSI DURUMU*\n\n"
     for ticker, isim_tuple in FOREX_PARITELERI.items():
@@ -74,9 +104,8 @@ def anlik_durum_raporu():
             if not df.empty and len(df) >= 20:
                 fiyat = round(df['Close'].iloc[-1], 4)
                 rsi = round(ta.momentum.rsi(df['Close'], window=14).iloc[-1], 2)
-                
                 durum_emoji = "🟢" if rsi > 55 else ("🔴" if rsi < 45 else "🟡")
-                rapor += f"{durum_emoji} *{isim}:* `{fiyat}` | RSI: `{rsi}`\n"
+                rapor += f"{durum_emoji} *{isim}:* `{fiyat}` | 📈 RSI: `{rsi}`\n"
         except:
             rapor += f"⚠️ *{isim}:* Veri alınamadı\n"
     return rapor
@@ -92,36 +121,40 @@ def telegram_komut_dinleyici():
                 for update in res["result"]:
                     LAST_UPDATE_ID = update["update_id"]
                     
-                    # Normal Mesaj/Komut
                     if "message" in update and "text" in update["message"]:
                         text = update["message"]["text"]
                         if text in ["/start", "/menu", "menu"]:
                             telegram_mesaj_gonder(
-                                "🤖 *ScalpBot PRO Kontrol Paneli*\nLütfen yapmak istediğiniz işlemi seçin:",
+                                "🤖 *ScalpBot ULTIMATE Kontrol Paneli*\n\nİstediğiniz işlemi aşağıdaki emojili menüden seçebilirsiniz:",
                                 ana_menu_keyboard()
                             )
-                        elif text == "/fiyat":
+                        elif text in ["/fiyat", "/analiz"]:
                             telegram_mesaj_gonder(anlik_durum_raporu(), ana_menu_keyboard())
+                        elif text == "/durum":
+                            telegram_mesaj_gonder("⚡ *Bot Durumu:* Aktif 🟢\n⏱️ Tarama: 60sn\n🛡️ Haber & Hafta Sonu Filtreleri: Açık", ana_menu_keyboard())
+                        elif text == "/tv":
+                            links = "🌐 *TRADINGVIEW CANLI GRAFİK LİNKLERİ*\n\n"
+                            for _, (isim, tv_sym) in FOREX_PARITELERI.items():
+                                links += f"📌 [{isim} Grafiğini Aç](https://www.tradingview.com/chart/?symbol={tv_sym})\n"
+                            telegram_mesaj_gonder(links, ana_menu_keyboard())
 
-                    # Buton Tıklaması
                     elif "callback_query" in update:
-                        cb = update["callback_query"]
-                        data = cb["data"]
-                        
-                        if data == "fiyatlar" or data == "analiz":
+                        data = update["callback_query"]["data"]
+                        if data in ["fiyatlar", "analiz"]:
                             telegram_mesaj_gonder(anlik_durum_raporu(), ana_menu_keyboard())
                         elif data == "durum":
-                            telegram_mesaj_gonder("🟢 *Bot Aktif:* 60sn periyotlarla tarama yapıyor.", ana_menu_keyboard())
+                            telegram_mesaj_gonder("⚡ *Bot Durumu:* Aktif 🟢\n⏱️ 60 saniyelik periyotlarla taranıyor.", ana_menu_keyboard())
                         elif data == "tv_links":
-                            links = "🌐 *TRADINGVIEW HIZLI GRAFİK LİNKLERİ*\n\n"
+                            links = "🌐 *TRADINGVIEW CANLI GRAFİK LİNKLERİ*\n\n"
                             for _, (isim, tv_sym) in FOREX_PARITELERI.items():
-                                links += f"• [{isim} Grafiği](https://www.tradingview.com/chart/?symbol={tv_sym})\n"
+                                links += f"📌 [{isim} Grafiğini Aç](https://www.tradingview.com/chart/?symbol={tv_sym})\n"
                             telegram_mesaj_gonder(links, ana_menu_keyboard())
         except Exception as e:
             print(f"Komut Dinleme Hatası: {e}")
         time.sleep(2)
 
 def forex_parite_tara(ticker_symbol, isim_tuple):
+    global GUNLUK_SINYAL_SAYISI
     isim, tv_symbol = isim_tuple
     suan = time.time()
 
@@ -174,12 +207,14 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
                 f"🚨 *PRO SCALP SİNYALİ (LONG / AL)* 🚨\n\n"
                 f"📌 *Parite:* {isim}\n"
                 f"🟢 *Giriş Fiyatı:* `{fiyat}`\n\n"
-                f"🎯 *TP1:* `{tp1}` | *TP2:* `{tp2}` | *TP3:* `{tp3}`\n"
+                f"🎯 *TP1:* `{tp1}` | 🎯 *TP2:* `{tp2}` | 🎯 *TP3:* `{tp3}`\n"
                 f"🛑 *Stop Loss:* `{sl}`\n\n"
-                f"📊 *RSI:* `{rsi}` | 🔗 [TradingView]({tv_link})"
+                f"💡 *Öneri:* TP1'e ulaştığında Stop Loss'u giriş seviyesine (`{fiyat}`) çekin.\n"
+                f"📊 *RSI:* `{rsi}` | 🔗 [TradingView Grafiği]({tv_link})"
             )
             telegram_mesaj_gonder(mesaj, ana_menu_keyboard())
             SON_SINYALLER[ticker_symbol] = suan
+            GUNLUK_SINYAL_SAYISI += 1
 
         elif sat_kosulu:
             sl = round(fiyat * (1 + sl_rate), 4)
@@ -190,25 +225,46 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
                 f"🚨 *PRO SCALP SİNYALİ (SHORT / SAT)* 🚨\n\n"
                 f"📌 *Parite:* {isim}\n"
                 f"🔴 *Satış Fiyatı:* `{fiyat}`\n\n"
-                f"🎯 *TP1:* `{tp1}` | *TP2:* `{tp2}` | *TP3:* `{tp3}`\n"
+                f"🎯 *TP1:* `{tp1}` | 🎯 *TP2:* `{tp2}` | 🎯 *TP3:* `{tp3}`\n"
                 f"🛡️ *Stop Loss:* `{sl}`\n\n"
-                f"📊 *RSI:* `{rsi}` | 🔗 [TradingView]({tv_link})"
+                f"💡 *Öneri:* TP1'e ulaştığında Stop Loss'u giriş seviyesine (`{fiyat}`) çekin.\n"
+                f"📊 *RSI:* `{rsi}` | 🔗 [TradingView Grafiği]({tv_link})"
             )
             telegram_mesaj_gonder(mesaj, ana_menu_keyboard())
             SON_SINYALLER[ticker_symbol] = suan
+            GUNLUK_SINYAL_SAYISI += 1
 
     except Exception as e:
         print(f"{isim} hatası: {e}")
 
-# Web Sunucusu Ve Telegram Dinleyici Başlat
+# Servisleri Başlat
 threading.Thread(target=run_web_server, daemon=True).start()
 threading.Thread(target=telegram_komut_dinleyici, daemon=True).start()
 
-# Başlangıç Bildirimi Ve Menü
-telegram_mesaj_gonder("🔥 *ScalpBot PRO & Telegram Menüsü Aktif!*\nAşağıdaki butonları kullanarak bota komut verebilirsiniz.", ana_menu_keyboard())
+# Menü Komutlarını Otomatik Kaydet
+telegram_komutlari_ayarla()
+
+# Başlangıç Bildirimi
+telegram_mesaj_gonder("🚀 *ScalpBot PRO Ultimate Aktif!*\nSol alt köşedeki emojili menüden komutları kullanabilirsiniz.", ana_menu_keyboard())
 
 # Ana Döngü
 while True:
+    simdi = datetime.now()
+    
+    if simdi.hour == 22 and not RAPOR_GONDERILDI:
+        telegram_mesaj_gonder(f"📈 *GÜNLÜK BÖLÜM RAPORU*\n\nBugün toplam `{GUNLUK_SINYAL_SAYISI}` adet kaliteli scalp sinyali üretildi.", ana_menu_keyboard())
+        RAPOR_GONDERILDI = True
+    elif simdi.hour != 22:
+        RAPOR_GONDERILDI = False
+
+    if hafta_sonu_mu():
+        time.sleep(300)
+        continue
+
+    if not haber_filtresi_aktif_mi():
+        time.sleep(60)
+        continue
+
     for ticker, isim_tuple in FOREX_PARITELERI.items():
         forex_parite_tara(ticker, isim_tuple)
         time.sleep(1)
