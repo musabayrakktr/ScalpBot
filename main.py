@@ -9,21 +9,21 @@ import pandas as pd
 import ta
 
 # --- BAKIYE, RISK VE OTO-TRADE AYARLARI ---
-HESAP_BAKIYESI = 1000.0   # Varsayılan $1000 bakiye
+HESAP_BAKIYESI = 3000.0   # $3000 demo bakiyenle eşitledik
 RISK_YUZDESI = 0.01      # %1 Risk
 AUTO_TRADE_AKTIF = False # Varsayılan kapalı (Sadece Sinyal)
 
-# --- RENDER WEB SUNUCUSU VE WEBHOOK (MT4/MT5 BRİDGE İÇİN) ---
+# --- RENDER WEB SUNUCUSU VE WEBHOOK ---
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.send_header('Content-type', 'text/html')
         self.end_headers()
-        self.wfile.write(b"ScalpBot Pro Auto-Trade Ready!")
+        self.wfile.write(b"ScalpBot Pro Active & Alive!")
 
     def do_POST(self):
         if self.path == '/webhook':
-            content_length = int(self.headers['Content-Length'])
+            content_length = int(self.headers.get('Content-Length', 0))
             post_data = self.rfile.read(content_length)
             print(f"Webhook Alındı: {post_data.decode('utf-8')}")
             self.send_response(200)
@@ -33,9 +33,12 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
 def run_web_server():
-    server_address = ('', 10000)
-    httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
-    httpd.serve_forever()
+    try:
+        server_address = ('', 10000)
+        httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
+        httpd.serve_forever()
+    except Exception as e:
+        print(f"Web Sunucu Hatası: {e}")
 
 # --- AYARLAR VE PARİTELER ---
 TELEGRAM_TOKEN = "8814586618:AAFrQ2kCbjXf8XuWaJ2NK-gCXkL2_8ik81c"
@@ -67,9 +70,9 @@ def telegram_komutlari_ayarla():
             {"command": "durum", "description": "⚡ Bot Çalışma Durumu"},
             {"command": "oto", "description": "🤖 Oto Al-Sat Aç/Kapat (/oto ac veya /oto kapat)"},
             {"command": "tv", "description": "🌐 TradingView Grafikleri"},
-            {"command": "bakiye", "description": "💰 Bakiye Güncelle (Örn: /bakiye 2000)"}
+            {"command": "bakiye", "description": "💰 Bakiye Güncelle (Örn: /bakiye 3000)"}
         ]
-        requests.post(url, json={"commands": commands})
+        requests.post(url, json={"commands": commands}, timeout=5)
     except Exception as e:
         print(f"Komut Set Hatası: {e}")
 
@@ -82,7 +85,7 @@ def telegram_mesaj_gonder(mesaj):
         "disable_web_page_preview": True
     }
     try:
-        requests.post(url, json=payload)
+        requests.post(url, json=payload, timeout=5)
     except Exception as e:
         print(f"Telegram Mesaj Hatası: {e}")
 
@@ -103,7 +106,6 @@ def lot_hesapla(fiyat, sl, ticker_symbol):
     return max(lot, 0.01)
 
 def metatrader_signal_gonder(signal_data):
-    """ MetaTrader EA / Auto-Trade Köprüsüne Sinyal İletimi """
     if not AUTO_TRADE_AKTIF:
         return
     try:
@@ -169,7 +171,7 @@ def telegram_komut_dinleyici():
     
     while True:
         try:
-            res = requests.get(url, params={"offset": LAST_UPDATE_ID + 1, "timeout": 10}).json()
+            res = requests.get(url, params={"offset": LAST_UPDATE_ID + 1, "timeout": 5}, timeout=10).json()
             if "result" in res:
                 for update in res["result"]:
                     LAST_UPDATE_ID = update["update_id"]
@@ -208,11 +210,11 @@ def telegram_komut_dinleyici():
                                 HESAP_BAKIYESI = yeni_bakiye
                                 telegram_mesaj_gonder(f"✅ *Hesap Bakiyesi Güncellendi!*\nYeni Kasa: `${HESAP_BAKIYESI}`\nLot miktarları bu bakiyenin %1 riskine göre hesaplanacak.")
                             except:
-                                telegram_mesaj_gonder("⚠️ Lütfen geçerli bir bakiye girin. Örnek kullanım: `/bakiye 2000`")
+                                telegram_mesaj_gonder("⚠️ Lütfen geçerli bir bakiye girin. Örnek kullanım: `/bakiye 3000`")
 
         except Exception as e:
             print(f"Komut Dinleme Hatası: {e}")
-        time.sleep(2)
+        time.sleep(1)
 
 def forex_parite_tara(ticker_symbol, isim_tuple):
     global GUNLUK_SINYAL_SAYISI
@@ -336,7 +338,7 @@ threading.Thread(target=telegram_komut_dinleyici, daemon=True).start()
 telegram_komutlari_ayarla()
 
 # Başlangıç Bildirimi
-telegram_mesaj_gonder("🚀 *ScalpBot PRO Auto-Trade Ready Aktif!*\n`/oto ac` ve `/oto kapat` komutlarıyla otomatik al-sat modunu yönetebilirsiniz.")
+telegram_mesaj_gonder("🚀 *ScalpBot Sistem Yeniden Başlatıldı!*\nKomut dinleyici ve sinyal taraması kesintisiz aktif.")
 
 # Ana Döngü
 while True:
