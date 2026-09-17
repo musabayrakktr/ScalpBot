@@ -1,1 +1,4 @@
-
+yfinance
+pandas
+pandas_ta
+requests
