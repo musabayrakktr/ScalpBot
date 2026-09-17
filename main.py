@@ -1,19 +1,35 @@
 import time
 import requests
+import json
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import yfinance as yf
 import pandas as pd
 import ta
 
-# --- RENDER WEB SUNUCUSU ---
+# --- BAKIYE VE RISK AYARLARI ---
+HESAP_BAKIYESI = 1000.0  # Varsayılan $1000 bakiye
+RISK_YUZDESI = 0.01     # %1 Risk
+
+# --- RENDER WEB SUNUCUSU VE WEBHOOK ---
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.send_header('Content-type', 'text/html')
         self.end_headers()
-        self.wfile.write(b"ScalpBot Pro Ultimate Aktif!")
+        self.wfile.write(b"ScalpBot Pro Auto-Trade Ready!")
+
+    def do_POST(self):
+        if self.path == '/webhook':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            print(f"Webhook Alındı: {post_data.decode('utf-8')}")
+            self.send_response(200)
+            self.end_headers()
+        else:
+            self.send_response(404)
+            self.end_headers()
 
 def run_web_server():
     server_address = ('', 10000)
@@ -38,21 +54,24 @@ COOLDOWN_SURESI = 900  # 15 Dakika
 LAST_UPDATE_ID = 0
 GUNLUK_SINYAL_SAYISI = 0
 RAPOR_GONDERILDI = False
+ACILIS_UYARI_LONDRA = False
+ACILIS_UYARI_NY = False
 
 def telegram_komutlari_ayarla():
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/setMyCommands"
         commands = [
-            {"command": "start", "description": "🚀 Kontrol Paneli & Menü"},
+            {"command": "start", "description": "🚀 Kontrol Paneli & Bilgi"},
             {"command": "fiyat", "description": "📊 Canlı Fiyatlar & RSI"},
             {"command": "durum", "description": "⚡ Bot Çalışma Durumu"},
-            {"command": "tv", "description": "🌐 TradingView Grafikleri"}
+            {"command": "tv", "description": "🌐 TradingView Grafikleri"},
+            {"command": "bakiye", "description": "💰 Bakiye Güncelle (Örn: /bakiye 2000)"}
         ]
         requests.post(url, json={"commands": commands})
     except Exception as e:
         print(f"Komut Set Hatası: {e}")
 
-def telegram_mesaj_gonder(mesaj, keyboard=None):
+def telegram_mesaj_gonder(mesaj):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHAT_ID,
@@ -60,26 +79,33 @@ def telegram_mesaj_gonder(mesaj, keyboard=None):
         "parse_mode": "Markdown",
         "disable_web_page_preview": True
     }
-    if keyboard:
-        payload["reply_markup"] = keyboard
     try:
         requests.post(url, json=payload)
     except Exception as e:
         print(f"Telegram Mesaj Hatası: {e}")
 
-def ana_menu_keyboard():
-    return {
-        "inline_keyboard": [
-            [
-                {"text": "📊 Canlı Fiyatlar", "callback_data": "fiyatlar"},
-                {"text": "🔍 Trend Analizi", "callback_data": "analiz"}
-            ],
-            [
-                {"text": "⚡ Bot Durumu", "callback_data": "durum"},
-                {"text": "🌐 TradingView Linkleri", "callback_data": "tv_links"}
-            ]
-        ]
-    }
+def lot_hesapla(fiyat, sl, ticker_symbol):
+    global HESAP_BAKIYESI, RISK_YUZDESI
+    fark = abs(fiyat - sl)
+    if fark == 0:
+        return 0.01
+
+    risked_amount = HESAP_BAKIYESI * RISK_YUZDESI
+    
+    if "GC=F" in ticker_symbol:
+        lot = risked_amount / (fark * 100)
+    else:
+        lot = risked_amount / (fark * 100000)
+
+    lot = round(lot, 2)
+    return max(lot, 0.01)
+
+def metatrader_signal_gonder(signal_data):
+    try:
+        url = "http://127.0.0.1:10000/webhook"
+        requests.post(url, json=signal_data, timeout=2)
+    except Exception as e:
+        print(f"Auto-Trade Webhook İletim Hatası: {e}")
 
 def haber_filtresi_aktif_mi():
     simdi = datetime.now(timezone.utc)
@@ -95,8 +121,29 @@ def hafta_sonu_mu():
         return True
     return False
 
+def borsa_acilis_kontrol():
+    global ACILIS_UYARI_LONDRA, ACILIS_UYARI_NY
+    simdi_tsi = datetime.now(timezone.utc) + timedelta(hours=3)
+    saat, dakika = simdi_tsi.hour, simdi_tsi.minute
+
+    if saat == 9 and 45 <= dakika <= 59:
+        if not ACILIS_UYARI_LONDRA:
+            telegram_mesaj_gonder("🚨 *BORSA AÇILIŞ UYARISI (LONDRA)* 🏛️\n\n15 Dakika sonra Avrupa/Londra borsası açılıyor! Yüksek hacim ve sert hareketler bekleniyor.")
+            ACILIS_UYARI_LONDRA = True
+    else:
+        if saat != 9:
+            ACILIS_UYARI_LONDRA = False
+
+    if saat == 15 and 15 <= dakika <= 29:
+        if not ACILIS_UYARI_NY:
+            telegram_mesaj_gonder("🚨 *BORSA AÇILIŞ UYARISI (NEW YORK)* 🗽\n\n15 Dakika sonra ABD/New York borsası açılıyor! Hacim tepe noktaya ulaşabilir.")
+            ACILIS_UYARI_NY = True
+    else:
+        if saat != 15:
+            ACILIS_UYARI_NY = False
+
 def anlik_durum_raporu():
-    rapor = "📊 *CANLI PARİTE VE RSI DURUMU*\n\n"
+    rapor = f"📊 *CANLI PARİTE VE RSI DURUMU*\n💰 *Aktif Bakiye:* `${HESAP_BAKIYESI}` (%1 Risk Modu)\n\n"
     for ticker, isim_tuple in FOREX_PARITELERI.items():
         isim, _ = isim_tuple
         try:
@@ -111,7 +158,7 @@ def anlik_durum_raporu():
     return rapor
 
 def telegram_komut_dinleyici():
-    global LAST_UPDATE_ID
+    global LAST_UPDATE_ID, HESAP_BAKIYESI
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
     
     while True:
@@ -122,33 +169,28 @@ def telegram_komut_dinleyici():
                     LAST_UPDATE_ID = update["update_id"]
                     
                     if "message" in update and "text" in update["message"]:
-                        text = update["message"]["text"]
+                        text = update["message"]["text"].strip()
                         if text in ["/start", "/menu", "menu"]:
                             telegram_mesaj_gonder(
-                                "🤖 *ScalpBot ULTIMATE Kontrol Paneli*\n\nİstediğiniz işlemi aşağıdaki emojili menüden seçebilirsiniz:",
-                                ana_menu_keyboard()
+                                f"🤖 *ScalpBot ULTIMATE Kontrol Paneli*\n\n💰 *Aktif Kasa:* `${HESAP_BAKIYESI}`\n\nSol alt köşedeki **Menu** butonuna basarak canlı fiyatları, bot durumunu ve grafik linklerini sorgulayabilirsiniz."
                             )
                         elif text in ["/fiyat", "/analiz"]:
-                            telegram_mesaj_gonder(anlik_durum_raporu(), ana_menu_keyboard())
+                            telegram_mesaj_gonder(anlik_durum_raporu())
                         elif text == "/durum":
-                            telegram_mesaj_gonder("⚡ *Bot Durumu:* Aktif 🟢\n⏱️ Tarama: 60sn\n🛡️ Haber & Hafta Sonu Filtreleri: Açık", ana_menu_keyboard())
+                            telegram_mesaj_gonder(f"⚡ *Bot Durumu:* Aktif 🟢\n💰 Kasa Bakiyesi: `${HESAP_BAKIYESI}`\n🛡️ Haber, Volatilite & Auto-Trade Altyapısı: Aktif")
                         elif text == "/tv":
                             links = "🌐 *TRADINGVIEW CANLI GRAFİK LİNKLERİ*\n\n"
                             for _, (isim, tv_sym) in FOREX_PARITELERI.items():
                                 links += f"📌 [{isim} Grafiğini Aç](https://www.tradingview.com/chart/?symbol={tv_sym})\n"
-                            telegram_mesaj_gonder(links, ana_menu_keyboard())
+                            telegram_mesaj_gonder(links)
+                        elif text.startswith("/bakiye"):
+                            try:
+                                yeni_bakiye = float(text.split()[1])
+                                HESAP_BAKIYESI = yeni_bakiye
+                                telegram_mesaj_gonder(f"✅ *Hesap Bakiyesi Güncellendi!*\nYeni Kasa: `${HESAP_BAKIYESI}`\nLot miktarları bu bakiyenin %1 riskine göre hesaplanacak.")
+                            except:
+                                telegram_mesaj_gonder("⚠️ Lütfen geçerli bir bakiye girin. Örnek kullanım: `/bakiye 2000`")
 
-                    elif "callback_query" in update:
-                        data = update["callback_query"]["data"]
-                        if data in ["fiyatlar", "analiz"]:
-                            telegram_mesaj_gonder(anlik_durum_raporu(), ana_menu_keyboard())
-                        elif data == "durum":
-                            telegram_mesaj_gonder("⚡ *Bot Durumu:* Aktif 🟢\n⏱️ 60 saniyelik periyotlarla taranıyor.", ana_menu_keyboard())
-                        elif data == "tv_links":
-                            links = "🌐 *TRADINGVIEW CANLI GRAFİK LİNKLERİ*\n\n"
-                            for _, (isim, tv_sym) in FOREX_PARITELERI.items():
-                                links += f"📌 [{isim} Grafiğini Aç](https://www.tradingview.com/chart/?symbol={tv_sym})\n"
-                            telegram_mesaj_gonder(links, ana_menu_keyboard())
         except Exception as e:
             print(f"Komut Dinleme Hatası: {e}")
         time.sleep(2)
@@ -198,21 +240,37 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
         sl_rate = 0.0030 if is_gold else 0.0015
         tv_link = f"https://www.tradingview.com/chart/?symbol={tv_symbol}"
 
+        simdi_tsi = datetime.now(timezone.utc) + timedelta(hours=3)
+        hacim_etiketi = " 🔥 *[YÜKSEK HACİM]*" if simdi_tsi.hour in [10, 11, 15, 16, 17] else ""
+
         if al_kosulu:
             sl = round(fiyat * (1 - sl_rate), 4)
             fark = fiyat - sl
             tp1, tp2, tp3 = round(fiyat + fark, 4), round(fiyat + (fark * 2), 4), round(fiyat + (fark * 3), 4)
+            
+            önerilen_lot = lot_hesapla(fiyat, sl, ticker_symbol)
 
             mesaj = (
-                f"🚨 *PRO SCALP SİNYALİ (LONG / AL)* 🚨\n\n"
+                f"🚨 *PRO SCALP SİNYALİ (LONG / AL)*{hacim_etiketi} 🚨\n\n"
                 f"📌 *Parite:* {isim}\n"
-                f"🟢 *Giriş Fiyatı:* `{fiyat}`\n\n"
+                f"🟢 *Giriş Fiyatı:* `{fiyat}`\n"
+                f"💵 *Önerilen Lot (%1 Risk):* `{önerilen_lot} Lot`\n\n"
                 f"🎯 *TP1:* `{tp1}` | 🎯 *TP2:* `{tp2}` | 🎯 *TP3:* `{tp3}`\n"
                 f"🛑 *Stop Loss:* `{sl}`\n\n"
                 f"💡 *Öneri:* TP1'e ulaştığında Stop Loss'u giriş seviyesine (`{fiyat}`) çekin.\n"
                 f"📊 *RSI:* `{rsi}` | 🔗 [TradingView Grafiği]({tv_link})"
             )
-            telegram_mesaj_gonder(mesaj, ana_menu_keyboard())
+            telegram_mesaj_gonder(mesaj)
+            
+            metatrader_signal_gonder({
+                "action": "BUY",
+                "symbol": isim,
+                "price": fiyat,
+                "lot": önerilen_lot,
+                "sl": sl,
+                "tp1": tp1, "tp2": tp2, "tp3": tp3
+            })
+
             SON_SINYALLER[ticker_symbol] = suan
             GUNLUK_SINYAL_SAYISI += 1
 
@@ -221,16 +279,29 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
             fark = sl - fiyat
             tp1, tp2, tp3 = round(fiyat - fark, 4), round(fiyat - (fark * 2), 4), round(fiyat - (fark * 3), 4)
 
+            önerilen_lot = lot_hesapla(fiyat, sl, ticker_symbol)
+
             mesaj = (
-                f"🚨 *PRO SCALP SİNYALİ (SHORT / SAT)* 🚨\n\n"
+                f"🚨 *PRO SCALP SİNYALİ (SHORT / SAT)*{hacim_etiketi} 🚨\n\n"
                 f"📌 *Parite:* {isim}\n"
-                f"🔴 *Satış Fiyatı:* `{fiyat}`\n\n"
+                f"🔴 *Satış Fiyatı:* `{fiyat}`\n"
+                f"💵 *Önerilen Lot (%1 Risk):* `{önerilen_lot} Lot`\n\n"
                 f"🎯 *TP1:* `{tp1}` | 🎯 *TP2:* `{tp2}` | 🎯 *TP3:* `{tp3}`\n"
                 f"🛡️ *Stop Loss:* `{sl}`\n\n"
                 f"💡 *Öneri:* TP1'e ulaştığında Stop Loss'u giriş seviyesine (`{fiyat}`) çekin.\n"
                 f"📊 *RSI:* `{rsi}` | 🔗 [TradingView Grafiği]({tv_link})"
             )
-            telegram_mesaj_gonder(mesaj, ana_menu_keyboard())
+            telegram_mesaj_gonder(mesaj)
+
+            metatrader_signal_gonder({
+                "action": "SELL",
+                "symbol": isim,
+                "price": fiyat,
+                "lot": önerilen_lot,
+                "sl": sl,
+                "tp1": tp1, "tp2": tp2, "tp3": tp3
+            })
+
             SON_SINYALLER[ticker_symbol] = suan
             GUNLUK_SINYAL_SAYISI += 1
 
@@ -245,14 +316,16 @@ threading.Thread(target=telegram_komut_dinleyici, daemon=True).start()
 telegram_komutlari_ayarla()
 
 # Başlangıç Bildirimi
-telegram_mesaj_gonder("🚀 *ScalpBot PRO Ultimate Aktif!*\nSol alt köşedeki emojili menüden komutları kullanabilirsiniz.", ana_menu_keyboard())
+telegram_mesaj_gonder("🚀 *ScalpBot PRO Aktif!*\nSohbet görünümü sadeleştirildi. Sol alt menüden komutları kullanabilirsiniz.")
 
 # Ana Döngü
 while True:
     simdi = datetime.now()
     
+    borsa_acilis_kontrol()
+
     if simdi.hour == 22 and not RAPOR_GONDERILDI:
-        telegram_mesaj_gonder(f"📈 *GÜNLÜK BÖLÜM RAPORU*\n\nBugün toplam `{GUNLUK_SINYAL_SAYISI}` adet kaliteli scalp sinyali üretildi.", ana_menu_keyboard())
+        telegram_mesaj_gonder(f"📈 *GÜNLÜK BÖLÜM RAPORU*\n\nBugün toplam `{GUNLUK_SINYAL_SAYISI}` adet kaliteli scalp sinyali üretildi.")
         RAPOR_GONDERILDI = True
     elif simdi.hour != 22:
         RAPOR_GONDERILDI = False
