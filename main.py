@@ -1,14 +1,29 @@
 import time
 import requests
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import yfinance as yf
 import pandas as pd
-import pandas_ta as ta
+import ta
+
+# --- RENDER WEB SUNUCUSU DİNLEYİCİSİ (PORT HATASINI ÇÖZER) ---
+class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(b"Bot Aktif ve Calisiyor!")
+
+def run_web_server():
+    server_address = ('', 10000)
+    httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
+    print("Web sunucusu başlatıldı...")
+    httpd.serve_forever()
 
 # --- BİLDİRİM VE PARİTE AYARLARI ---
 TELEGRAM_TOKEN = "8814586618:AAFrQ2kCbjXf8XuWaJ2NK-gCXkL2_8ik81c"
 CHAT_ID = "8982017587"
 
-# Hacmi ve kazanç potansiyeli en yüksek Forex Listesi
 FOREX_PARITELERI = {
     "EURUSD=X": "EUR/USD",
     "GBPUSD=X": "GBP/USD",
@@ -17,7 +32,7 @@ FOREX_PARITELERI = {
     "AUDUSD=X": "AUD/USD"
 }
 
-TIMEFRAME = "5m"  # 5 Dakikalık Mumlar (Scalp)
+TIMEFRAME = "5m"
 
 def telegram_mesaj_gonder(mesaj):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -29,17 +44,15 @@ def telegram_mesaj_gonder(mesaj):
 
 def forex_parite_tara(ticker_symbol, isim):
     try:
-        # Canlı veriyi çek (Son 1 günün 5 dakikalık mumları)
         ticker = yf.Ticker(ticker_symbol)
         df = ticker.history(period="1d", interval=TIMEFRAME)
 
         if df.empty or len(df) < 30:
             return
 
-        # İndikatör Hesaplamaları
-        df['EMA_Fast'] = ta.ema(df['Close'], length=9)
-        df['EMA_Slow'] = ta.ema(df['Close'], length=21)
-        df['RSI'] = ta.rsi(df['Close'], length=14)
+        df['EMA_Fast'] = ta.trend.ema_indicator(df['Close'], window=9)
+        df['EMA_Slow'] = ta.trend.ema_indicator(df['Close'], window=21)
+        df['RSI'] = ta.momentum.rsi(df['Close'], window=14)
 
         son = df.iloc[-1]
         onceki = df.iloc[-2]
@@ -47,15 +60,9 @@ def forex_parite_tara(ticker_symbol, isim):
         fiyat = round(son['Close'], 4)
         rsi = round(son['RSI'], 2)
 
-        # Hacim Filtresi
-        hacim_ort = df['Volume'].rolling(20).mean().iloc[-1]
-        hacim_onayi = True if hacim_ort == 0 else (son['Volume'] >= hacim_ort)
+        al_kosulu = (onceki['EMA_Fast'] <= onceki['EMA_Slow']) and (son['EMA_Fast'] > son['EMA_Slow']) and (rsi > 50)
+        sat_kosulu = (onceki['EMA_Fast'] >= onceki['EMA_Slow']) and (son['EMA_Fast'] < son['EMA_Slow']) and (rsi < 50)
 
-        # AL / SAT KOSULLARI
-        al_kosulu = (onceki['EMA_Fast'] <= onceki['EMA_Slow']) and (son['EMA_Fast'] > son['EMA_Slow']) and (rsi > 50) and hacim_onayi
-        sat_kosulu = (onceki['EMA_Fast'] >= onceki['EMA_Slow']) and (son['EMA_Fast'] < son['EMA_Slow']) and (rsi < 50) and hacim_onayi
-
-        # Altın (XAU/USD) için esnek risk marjı, dövizler için standart marj
         is_gold = "GC=F" in ticker_symbol
         sl_rate = 0.0030 if is_gold else 0.0015
         tp_rate = 0.0060 if is_gold else 0.0030
@@ -73,7 +80,6 @@ def forex_parite_tara(ticker_symbol, isim):
                 f"🔍 *RSI:* {rsi}"
             )
             telegram_mesaj_gonder(mesaj)
-            print(f"{isim} için AL sinyali gönderildi.")
 
         elif sat_kosulu:
             stop_loss = round(fiyat * (1 + sl_rate), 4)
@@ -88,15 +94,17 @@ def forex_parite_tara(ticker_symbol, isim):
                 f"🔍 *RSI:* {rsi}"
             )
             telegram_mesaj_gonder(mesaj)
-            print(f"{isim} için SAT sinyali gönderildi.")
 
     except Exception as e:
         print(f"{isim} taranırken hata: {e}")
 
-# İlk açılışta bota bağlandığını doğrulamak için mesaj gönderir
+# Web sunucusunu arka planda çalıştır
+threading.Thread(target=run_web_server, daemon=True).start()
+
+# Başlangıç bildirimi
 telegram_mesaj_gonder("🚀 *Forex Scalp Botu Başarıyla Çalıştırıldı!* Pariteler taranıyor...")
 
-# 2 dakikada bir tarama döngüsü
+# Ana Döngü
 while True:
     print("Forex piyasası taranıyor...")
     for ticker, isim in FOREX_PARITELERI.items():
