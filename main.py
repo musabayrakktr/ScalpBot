@@ -344,6 +344,14 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
                 'entry': fiyat,
                 'tp1': tp1, 'tp2': tp2, 'tp3': tp3,
                 'sl': sl,
+                'tp1_hatasi': False, 'tp1_hit': False, 'tp2_hit': False, 'tp3_hit': False
+            }
+            # Düzeltilmiş aktif işlem kaydı yapısı:
+            AKTIF_ISLEMLER[ticker_symbol] = {
+                'yon': 'BUY',
+                'entry': fiyat,
+                'tp1': tp1, 'tp2': tp2, 'tp3': tp3,
+                'sl': sl,
                 'tp1_hit': False, 'tp2_hit': False, 'tp3_hit': False
             }
             aktif_islemleri_kaydet(AKTIF_ISLEMLER)
