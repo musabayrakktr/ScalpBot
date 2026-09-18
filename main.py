@@ -67,6 +67,7 @@ GUNLUK_SINYAL_SAYISI = 0
 RAPOR_GONDERILDI = False
 ACILIS_UYARI_LONDRA = False
 ACILIS_UYARI_NY = False
+SON_SAATLIK_BILDIRIM = 0  # 1 Saatlik rapor takip zamanı
 
 def telegram_komutlari_ayarla():
     if not TELEGRAM_TOKEN:
@@ -319,7 +320,8 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
         tv_link = f"https://www.tradingview.com/chart/?symbol={tv_symbol}"
 
         simdi_utc = datetime.now(timezone.utc)
-        hacim_etiketi = " 🔥 *[YÜKSEK HACİM]*" if simdi_utc.hour in else ""
+        yuksek_hacim_saatleri =
+        hacim_etiketi = " 🔥 *[YÜKSEK HACİM]*" if simdi_utc.hour in yuksek_hacim_saatleri else ""
 
         if al_kosulu:
             sl = round(fiyat * (1 - sl_rate), 4)
@@ -383,14 +385,29 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
         print(f"{isim} hatası: {e}")
 
 def background_worker():
-    global GUNLUK_SINYAL_SAYISI, RAPOR_GONDERILDI
+    global GUNLUK_SINYAL_SAYISI, RAPOR_GONDERILDI, SON_SAATLIK_BILDIRIM
     telegram_komutlari_ayarla()
     telegram_mesaj_gonder("🚀 *ScalpBot Tam Güvenlikli Sürümle Başlatıldı!*\n`/test` komutunu yazarak bağlantıyı deneyebilirsiniz.")
 
     while True:
         try:
             simdi = datetime.now()
+            suan_epoch = time.time()
             borsa_acilis_kontrol()
+
+            # --- 1 SAATTE BİR OTOMATİK DURUM RAPORU ---
+            if suan_epoch - SON_SAATLIK_BILDIRIM > 3600:
+                aktif_sayi = len(AKTIF_ISLEMLER)
+                saatlik_ozet = (
+                    f"🌟 *SCALPBOT SAATLİK DURUM RAPORU* ⏰\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🟢 *Sistem:* Aktif ve tarama yapıyor\n"
+                    f"📊 *Günlük Üretilen Sinyal:* `{GUNLUK_SINYAL_SAYISI}`\n"
+                    f"📌 *Aktif Pozisyon / Takip:* `{aktif_sayi} adet`\n"
+                    f"💰 *Demo Kasa:* `${HESAP_BAKIYESI}`"
+                )
+                telegram_mesaj_gonder(saatlik_ozet)
+                SON_SAATLIK_BILDIRIM = suan_epoch
 
             if simdi.hour == 22 and not RAPOR_GONDERILDI:
                 telegram_mesaj_gonder(f"📈 *GÜNLÜK BÖLÜM RAPORU*\n\nBugün toplam `{GUNLUK_SINYAL_SAYISI}` adet kaliteli scalp sinyali üretildi.")
