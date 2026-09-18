@@ -67,7 +67,7 @@ GUNLUK_SINYAL_SAYISI = 0
 RAPOR_GONDERILDI = False
 ACILIS_UYARI_LONDRA = False
 ACILIS_UYARI_NY = False
-SON_SAATLIK_BILDIRIM = 0  # 1 Saatlik rapor takip zamanı
+SON_SAATLIK_BILDIRIM = 0
 
 def telegram_komutlari_ayarla():
     if not TELEGRAM_TOKEN:
@@ -134,7 +134,6 @@ def borsa_acilis_kontrol():
     simdi_utc = datetime.now(timezone.utc)
     saat, dakika = simdi_utc.hour, simdi_utc.minute
 
-    # Londra Açılış (07:00 UTC)
     if saat == 6 and 45 <= dakika <= 59:
         if not ACILIS_UYARI_LONDRA:
             telegram_mesaj_gonder("🚨 *BORSA AÇILIŞ UYARISI (LONDRA)* 🏛️\n\n15 Dakika sonra Avrupa/Londra borsası açılıyor!")
@@ -143,7 +142,6 @@ def borsa_acilis_kontrol():
         if saat != 6:
             ACILIS_UYARI_LONDRA = False
 
-    # New York Açılış (12:30 UTC)
     if saat == 12 and 15 <= dakika <= 29:
         if not ACILIS_UYARI_NY:
             telegram_mesaj_gonder("🚨 *BORSA AÇILIŞ UYARISI (NEW YORK)* 🗽\n\n15 Dakika sonra ABD/New York borsası açılıyor!")
@@ -216,7 +214,6 @@ def anlik_durum_raporu():
     return rapor
 
 def telegram_komut_dinleyici():
-    """ Sadece Yetkili CHAT_ID İçin Polling Dinleyici """
     global LAST_UPDATE_ID, HESAP_BAKIYESI
     if not TELEGRAM_TOKEN:
         return
@@ -395,7 +392,6 @@ def background_worker():
             suan_epoch = time.time()
             borsa_acilis_kontrol()
 
-            # --- 1 SAATTE BİR OTOMATİK DURUM RAPORU ---
             if suan_epoch - SON_SAATLIK_BILDIRIM > 3600:
                 aktif_sayi = len(AKTIF_ISLEMLER)
                 saatlik_ozet = (
