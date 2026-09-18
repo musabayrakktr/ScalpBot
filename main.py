@@ -9,91 +9,60 @@ import yfinance as yf
 import pandas as pd
 import ta
 
-# --- FLASK WEB SUNUCUSU (TEMİZ RENDER & CRON MİMARİSİ) ---
+# --- FLASK (Render Health-Check İçin) ---
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return jsonify({"status": "active", "service": "ScalpBot Pro"}), 200
+    return jsonify({"status": "active", "bot": "ForexDemoBot"}), 200
 
 @app.route('/health', methods=['GET'])
 def health():
-    return "OK"
+    return "OK", 200
 
-# --- ENVIRONMENT VARIABLES (GÜVENLİK) ---
+# --- AYARLAR & SANAL KASA ---
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 CHAT_ID = os.environ.get("CHAT_ID", "")
 
-# --- BAKIYE VE RISK AYARLARI ---
-HESAP_BAKIYESI = 3000.0   # $3000 Demo
-RISK_YUZDESI = 0.01      # %1 Risk
+SANAL_KASA_FILE = "sanal_kasa.json"
 
-# --- KALICI TP/SL TAKİP SİSTEMİ (JSON VERİTABANI) ---
-JSON_FILE = "aktif_islemler.json"
-
-def aktif_islemleri_yukle():
-    if os.path.exists(JSON_FILE):
+def kasa_yukle():
+    if os.path.exists(SANAL_KASA_FILE):
         try:
-            with open(JSON_FILE, "r") as f:
+            with open(SANAL_KASA_FILE, "r") as f:
                 return json.load(f)
         except:
-            return {}
-    return {}
+            pass
+    return {"bakiye": 3000.0, "aktif_poz": {}}
 
-def aktif_islemleri_kaydet(data):
+def kasa_kaydet(data):
     try:
-        with open(JSON_FILE, "w") as f:
+        with open(SANAL_KASA_FILE, "w") as f:
             json.dump(data, f, indent=4)
     except Exception as e:
-        print(f"JSON Kayıt Hatası: {e}")
+        print(f"Kasa kayıt hatası: {e}")
 
-AKTIF_ISLEMLER = aktif_islemleri_yukle()
+KASA = kasa_yukle()
 
-# --- PARİTELER VE AYARLAR ---
-FOREX_PARITELERI = {
-    "EURUSD=X": ("EUR/USD", "FX:EURUSD"),
-    "GBPUSD=X": ("GBP/USD", "FX:GBPUSD"),
-    "GC=F": ("XAU/USD (Altın)", "OANDA:XAUUSD"),
-    "JPY=X": ("USD/JPY", "FX:USDJPY"),
-    "AUDUSD=X": ("AUD/USD", "FX:AUDUSD")
+# Takip edilecek Forex / Altın pariteleri (yfinance sembolleri)
+PARITELER = {
+    "EURUSD=X": "EUR/USD",
+    "GBPUSD=X": "GBP/USD",
+    "GC=F": "XAU/USD (Altın)",
+    "USDJPY=X": "USD/JPY"
 }
 
-TIMEFRAME = "5m"
-SON_SINYALLER = {}
-COOLDOWN_SURESI = 900  # 15 Dakika
+TIMEFRAME = "1h"
+RISK_MIKTARI = 150.0  # İşlem başına risk sanal $150
 LAST_UPDATE_ID = 0
-GUNLUK_SINYAL_SAYISI = 0
-RAPOR_GONDERILDI = False
-ACILIS_UYARI_LONDRA = False
-ACILIS_UYARI_NY = False
-SON_SAATLIK_BILDIRIM = 0
 
-def telegram_komutlari_ayarla():
-    if not TELEGRAM_TOKEN:
-        return
-    try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/setMyCommands"
-        commands = [
-            {"command": "start", "description": "🚀 Kontrol Paneli & Bilgi"},
-            {"command": "fiyat", "description": "📊 Canlı Fiyatlar & RSI"},
-            {"command": "durum", "description": "⚡ Bot Çalışma Durumu"},
-            {"command": "test", "description": "🧪 Bağlantı Testi"},
-            {"command": "tv", "description": "🌐 TradingView Grafikleri"},
-            {"command": "bakiye", "description": "💰 Bakiye Güncelle (Örn: /bakiye 3000)"}
-        ]
-        requests.post(url, json={"commands": commands}, timeout=5)
-    except Exception as e:
-        print(f"Komut Set Hatası: {e}")
-
-def telegram_mesaj_gonder(mesaj, target_chat=None):
-    if not TELEGRAM_TOKEN:
-        return
-    cid = target_chat if target_chat else CHAT_ID
-    if not cid:
+# --- TELEGRAM YARDIMCISI ---
+def telegram_gonder(mesaj):
+    if not TELEGRAM_TOKEN or not CHAT_ID:
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
-        "chat_id": cid,
+        "chat_id": CHAT_ID,
         "text": mesaj,
         "parse_mode": "Markdown",
         "disable_web_page_preview": True
@@ -101,119 +70,30 @@ def telegram_mesaj_gonder(mesaj, target_chat=None):
     try:
         requests.post(url, json=payload, timeout=5)
     except Exception as e:
-        print(f"Telegram Mesaj Hatası: {e}")
+        print(f"Telegram mesaj hatası: {e})"
 
-def lot_hesapla(fiyat, sl, ticker_symbol):
-    global HESAP_BAKIYESI, RISK_YUZDESI
-    fark = abs(fiyat - sl)
-    if fark == 0:
-        return 0.01
-
-    risked_amount = HESAP_BAKIYESI * RISK_YUZDESI
-    
-    if "GC=F" in ticker_symbol:
-        lot = risked_amount / (fark * 100)
-    elif "JPY=X" in ticker_symbol:
-        lot = risked_amount / ((fark / fiyat) * 100000)
-    else:
-        lot = risked_amount / (fark * 100000)
-
-    lot = round(lot, 2)
-    return max(lot, 0.01)
-
-def hafta_sonu_mu():
-    simdi = datetime.now(timezone.utc)
-    weekday = simdi.weekday()
-    if weekday == 5 or (weekday == 4 and simdi.hour >= 22) or (weekday == 6 and simdi.hour < 22):
-        return True
-    return False
-
-def borsa_acilis_kontrol():
-    global ACILIS_UYARI_LONDRA, ACILIS_UYARI_NY
-    simdi_utc = datetime.now(timezone.utc)
-    saat, dakika = simdi_utc.hour, simdi_utc.minute
-
-    if saat == 6 and 45 <= dakika <= 59:
-        if not ACILIS_UYARI_LONDRA:
-            telegram_mesaj_gonder("🚨 *BORSA AÇILIŞ UYARISI (LONDRA)* 🏛️\n\n15 Dakika sonra Avrupa/Londra borsası açılıyor!")
-            ACILIS_UYARI_LONDRA = True
-    else:
-        if saat != 6:
-            ACILIS_UYARI_LONDRA = False
-
-    if saat == 12 and 15 <= dakika <= 29:
-        if not ACILIS_UYARI_NY:
-            telegram_mesaj_gonder("🚨 *BORSA AÇILIŞ UYARISI (NEW YORK)* 🗽\n\n15 Dakika sonra ABD/New York borsası açılıyor!")
-            ACILIS_UYARI_NY = True
-    else:
-        if saat != 12:
-            ACILIS_UYARI_NY = False
-
-def tp_sl_kontrol_et(ticker_symbol, anlik_fiyat, isim):
-    if ticker_symbol not in AKTIF_ISLEMLER:
+# --- MENÜ AYARI ---
+def komutlari_ayarla():
+    if not TELEGRAM_TOKEN:
         return
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/setMyCommands"
+    commands = [
+        {"command": "durum", "description": "💰 Sanal Kasa & Pozisyonlar"},
+        {"command": "fiyat", "description": "📊 Anlık Forex/Altın Fiyat & RSI"},
+        {"command": "reset", "description": "🔄 Sanal Kasayı Sıfırla ($3000)"},
+        {"command": "yardim", "description": "ℹ️ Komut Listesi"}
+    ]
+    try:
+        requests.post(url, json={"commands": commands}, timeout=5)
+    except:
+        pass
 
-    islem = AKTIF_ISLEMLER[ticker_symbol]
-    yon = islem['yon']
-    entry = islem['entry']
-    degisiklik = False
+# --- HAFTA SONU KONTROLÜ (Forex kapalıdır) ---
+haffacilik_kapali_mi = lambda: datetime.now(timezone.utc).weekday() >= 5 or (datetime.now(timezone.utc).weekday() == 4 and datetime.now(timezone.utc).hour >= 21)
 
-    if yon == 'BUY':
-        if anlik_fiyat >= islem['tp1'] and not islem.get('tp1_hit'):
-            islem['tp1_hit'] = True
-            degisiklik = True
-            telegram_mesaj_gonder(f"🎯 *TP1 HEDEFİ GELDİ!* 🎉\n📌 *Parite:* {isim}\n💰 *Anlık Fiyat:* `{anlik_fiyat}`\n💡 *Öneri:* Stop Loss seviyesini giriş fiyatına (`{entry}`) çekin!")
-        elif anlik_fiyat >= islem['tp2'] and not islem.get('tp2_hit'):
-            islem['tp2_hit'] = True
-            degisiklik = True
-            telegram_mesaj_gonder(f"🚀 *TP2 HEDEFİ GELDİ!* 🔥\n📌 *Parite:* {isim}\n💰 *Anlık Fiyat:* `{anlik_fiyat}`")
-        elif anlik_fiyat >= islem['tp3'] and not islem.get('tp3_hit'):
-            telegram_mesaj_gonder(f"🔥 *TP3 MAKSİMUM HEDEF GELDİ!* 🏆\n📌 *Parite:* {isim}\n💰 *Anlık Fiyat:* `{anlik_fiyat}`")
-            del AKTIF_ISLEMLER[ticker_symbol]
-            degisiklik = True
-        elif anlik_fiyat <= islem['sl']:
-            telegram_mesaj_gonder(f"🔴 *STOP LOSS TETİKLENDİ!* 🛑\n📌 *Parite:* {isim}\n📉 *Fiyat:* `{anlik_fiyat}`")
-            del AKTIF_ISLEMLER[ticker_symbol]
-            degisiklik = True
-
-    elif yon == 'SELL':
-        if anlik_fiyat <= islem['tp1'] and not islem.get('tp1_hit'):
-            islem['tp1_hit'] = True
-            degisiklik = True
-            telegram_mesaj_gonder(f"🎯 *TP1 HEDEFİ GELDİ!* 🎉\n📌 *Parite:* {isim}\n💰 *Anlık Fiyat:* `{anlik_fiyat}`\n💡 *Öneri:* Stop Loss seviyesini giriş fiyatına (`{entry}`) çekin!")
-        elif anlik_fiyat <= islem['tp2'] and not islem.get('tp2_hit'):
-            islem['tp2_hit'] = True
-            degisiklik = True
-            telegram_mesaj_gonder(f"🚀 *TP2 HEDEFİ GELDİ!* 🔥\n📌 *Parite:* {isim}\n💰 *Anlık Fiyat:* `{anlik_fiyat}`")
-        elif anlik_fiyat <= islem['tp3'] and not islem.get('tp3_hit'):
-            telegram_mesaj_gonder(f"🔥 *TP3 MAKSİMUM HEDEF GELDİ!* 🏆\n📌 *Parite:* {isim}\n💰 *Anlık Fiyat:* `{anlik_fiyat}`")
-            del AKTIF_ISLEMLER[ticker_symbol]
-            degisiklik = True
-        elif anlik_fiyat >= islem['sl']:
-            telegram_mesaj_gonder(f"🔴 *STOP LOSS TETİKLENDİ!* 🛑\n📌 *Parite:* {isim}\n📈 *Fiyat:* `{anlik_fiyat}`")
-            del AKTIF_ISLEMLER[ticker_symbol]
-            degisiklik = True
-
-    if degisiklik:
-        aktif_islemleri_kaydet(AKTIF_ISLEMLER)
-
-def anlik_durum_raporu():
-    rapor = f"📊 *CANLI PARİTE VE RSI DURUMU*\n💰 *Kasa:* `${HESAP_BAKIYESI}`\n\n"
-    for ticker, isim_tuple in FOREX_PARITELERI.items():
-        isim, _ = isim_tuple
-        try:
-            df = yf.Ticker(ticker).history(period="1d", interval=TIMEFRAME)
-            if not df.empty and len(df) >= 20:
-                fiyat = round(df['Close'].iloc[-1], 4)
-                rsi = round(ta.momentum.rsi(df['Close'], window=14).iloc[-1], 2)
-                durum_emoji = "🟢" if rsi > 55 else ("🔴" if rsi < 45 else "🟡")
-                rapor += f"{durum_emoji} *{isim}:* `{fiyat}` | 📈 RSI: `{rsi}`\n"
-        except:
-            rapor += f"⚠️ *{isim}:* Veri alınamadı\n"
-    return rapor
-
-def telegram_komut_dinleyici():
-    global LAST_UPDATE_ID, HESAP_BAKIYESI
+# --- TELEGRAM KOMUT DİNLEYİCİ ---
+def telegram_dinleyici():
+    global LAST_UPDATE_ID, KASA
     if not TELEGRAM_TOKEN:
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
@@ -226,201 +106,151 @@ def telegram_komut_dinleyici():
                     LAST_UPDATE_ID = update["update_id"]
                     if "message" in update and "text" in update["message"]:
                         msg = update["message"]
-                        incoming_chat_id = str(msg["chat"]["id"])
+                        cid = str(msg["chat"]["id"])
                         
-                        if CHAT_ID and incoming_chat_id != str(CHAT_ID):
+                        if CHAT_ID and cid != str(CHAT_ID):
                             continue
 
-                        text = msg["text"].strip()
-                        if text in ["/start", "/menu", "menu"]:
-                            telegram_mesaj_gonder(
-                                f"🤖 *ScalpBot ULTIMATE Kontrol Paneli*\n\n💰 *Aktif Kasa:* `${HESAP_BAKIYESI}`\n\nKomutları alt menüden seçebilirsiniz.",
-                                target_chat=incoming_chat_id
+                        txt = msg["text"].strip().lower()
+
+                        if txt in ["/start", "/yardim", "yardım"]:
+                            telegram_gonder(
+                                "🤖 *Forex/Altın Simülasyon Botu*\n\n"
+                                "• `/durum` - Sanal kasa ve pozisyonlar\n"
+                                "• `/fiyat` - Canlı fiyatlar ve 1h RSI\n"
+                                "• `/reset` - Kasayı $3000'a sıfırla"
                             )
-                        elif text in ["/fiyat", "/analiz"]:
-                            telegram_mesaj_gonder(anlik_durum_raporu(), target_chat=incoming_chat_id)
-                        elif text == "/durum":
-                            telegram_mesaj_gonder(f"⚡ *Bot Durumu:* Aktif 🟢\n💰 Kasa Bakiyesi: `${HESAP_BAKIYESI}`", target_chat=incoming_chat_id)
-                        elif text == "/test":
-                            telegram_mesaj_gonder("✅ *Sistem Testi Başarılı!* Telegram polling ve sunucu bağlantısı sorunsuz çalışıyor 🚀", target_chat=incoming_chat_id)
-                        elif text == "/tv":
-                            links = "🌐 *TRADINGVIEW CANLI GRAFİK LİNKLERİ*\n\n"
-                            for _, (isim, tv_sym) in FOREX_PARITELERI.items():
-                                links += f"📌 [{isim} Grafiğini Aç](https://www.tradingview.com/chart/?symbol={tv_sym})\n"
-                            telegram_mesaj_gonder(links, target_chat=incoming_chat_id)
-                        elif text.startswith("/bakiye"):
-                            try:
-                                yeni_bakiye = float(text.split())
-                                HESAP_BAKIYESI = yeni_bakiye
-                                telegram_mesaj_gonder(f"✅ *Hesap Bakiyesi Güncellendi!*\nYeni Kasa: `${HESAP_BAKIYESI}`", target_chat=incoming_chat_id)
-                            except:
-                                telegram_mesaj_gonder("⚠️ Örnek kullanım: `/bakiye 3000`", target_chat=incoming_chat_id)
+                        elif txt == "/durum":
+                            bakiye = KASA["bakiye"]
+                            pozs = KASA["aktif_poz"]
+                            ozet = f"💰 *Sanal Kasa Bakiyesi:* `${bakiye:,.2f}`\n\n"
+                            if not pozs:
+                                ozet += "📌 *Aktif pozisyon yok.*"
+                            else:
+                                for sym, p in pozs.items():
+                                    ozet += f"• *{p['isim']}* ({p['yon']}) | Giriş: `{p['giris']}` | SL: `{p['sl']}` | TP: `{p['tp']}`\n"
+                            telegram_gonder(ozet)
+                        elif txt == "/fiyat":
+                            rapor = "📊 *Canlı 1 Saatlik Piyasalar*\n\n"
+                            for sembol, isim in PARITELER.items():
+                                try:
+                                    df = yf.Ticker(sembol).history(period="2d", interval=TIMEFRAME)
+                                    if not df.empty:
+                                        fiyat = round(df['Close'].iloc[-1], 4)
+                                        rsi = round(ta.momentum.rsi(df['Close'], window=14).iloc[-1], 2)
+                                        rapor += f"• *{isim}*: `{fiyat}` (RSI: `{rsi}`)\n"
+                                except:
+                                    rapor += f"• *{isim}*: Veri alınamadı\n"
+                            telegram_gonder(rapor)
+                        elif txt == "/reset":
+                            KASA = {"bakiye": 3000.0, "aktif_poz": {}}
+                            kasa_kaydet(KASA)
+                            telegram_gonder("🔄 Sanal kasa başarıyla *$3,000.00* olarak sıfırlandı!")
         except Exception as e:
             time.sleep(2)
         time.sleep(1)
 
-def forex_parite_tara(ticker_symbol, isim_tuple):
-    global GUNLUK_SINYAL_SAYISI
-    isim, tv_symbol = isim_tuple
-    suan = time.time()
-
-    if ticker_symbol in AKTIF_ISLEMLER:
-        try:
-            ticker = yf.Ticker(ticker_symbol)
-            df = ticker.history(period="1d", interval=TIMEFRAME)
-            if not df.empty:
-                fiyat = round(df['Close'].iloc[-1], 4)
-                tp_sl_kontrol_et(ticker_symbol, fiyat, isim)
-        except:
-            pass
-        return
-
-    try:
-        ticker = yf.Ticker(ticker_symbol)
-        df = ticker.history(period="1d", interval=TIMEFRAME)
-
-        if df.empty or len(df) < 35:
-            return
-
-        fiyat = round(df['Close'].iloc[-1], 4)
-
-        if ticker_symbol in SON_SINYALLER and (suan - SON_SINYALLER[ticker_symbol]) < COOLDOWN_SURESI:
-            return
-
-        df['EMA_Fast'] = ta.trend.ema_indicator(df['Close'], window=9)
-        df['EMA_Slow'] = ta.trend.ema_indicator(df['Close'], window=21)
-        df['RSI'] = ta.momentum.rsi(df['Close'], window=14)
-        macd_ind = ta.trend.MACD(df['Close'])
-        df['MACD_Diff'] = macd_ind.macd_diff()
-
-        son = df.iloc[-1]
-        onceki = df.iloc[-2]
-        rsi = round(son['RSI'], 2)
-
-        al_kosulu = (
-            (onceki['EMA_Fast'] <= onceki['EMA_Slow']) and 
-            (son['EMA_Fast'] > son['EMA_Slow']) and 
-            (rsi > 50) and 
-            (son['MACD_Diff'] > 0)
-        )
-
-        sat_kosulu = (
-            (onceki['EMA_Fast'] >= onceki['EMA_Slow']) and 
-            (son['EMA_Fast'] < son['EMA_Slow']) and 
-            (rsi < 50) and 
-            (son['MACD_Diff'] < 0)
-        )
-
-        is_gold = "GC=F" in ticker_symbol
-        sl_rate = 0.0030 if is_gold else 0.0015
-        tv_link = f"https://www.tradingview.com/chart/?symbol={tv_symbol}"
-
-        simdi_utc = datetime.now(timezone.utc)
-        yuksek_hacim_saatleri = {7, 8, 9, 13, 14, 15}
-        hacim_etiketi = " 🔥 *[YÜKSEK HACİM]*" if simdi_utc.hour in yuksek_hacim_saatleri else ""
-
-        if al_kosulu:
-            sl = round(fiyat * (1 - sl_rate), 4)
-            fark = fiyat - sl
-            tp1, tp2, tp3 = round(fiyat + fark, 4), round(fiyat + (fark * 2), 4), round(fiyat + (fark * 3), 4)
-            önerilen_lot = lot_hesapla(fiyat, sl, ticker_symbol)
-
-            mesaj = (
-                f"🚨 *PRO SCALP SİNYALİ (LONG / AL)*{hacim_etiketi} 🚨\n\n"
-                f"📌 *Parite:* {isim}\n"
-                f"🟢 *Giriş Fiyatı:* `{fiyat}`\n"
-                f"💵 *Önerilen Lot (%1 Risk):* `{önerilen_lot} Lot`\n\n"
-                f"🎯 *TP1:* `{tp1}` | 🎯 *TP2:* `{tp2}` | 🎯 *TP3:* `{tp3}`\n"
-                f"🛑 *Stop Loss:* `{sl}`\n\n"
-                f"💡 *Öneri:* TP1'e ulaştığında Stop Loss'u giriş seviyesine (`{fiyat}`) çekin.\n"
-                f"📊 *RSI:* `{rsi}` | 🔗 [TradingView Grafiği]({tv_link})"
-            )
-            telegram_mesaj_gonder(mesaj)
-
-            AKTIF_ISLEMLER[ticker_symbol] = {
-                'yon': 'BUY',
-                'entry': fiyat,
-                'tp1': tp1, 'tp2': tp2, 'tp3': tp3,
-                'sl': sl,
-                'tp1_hit': False, 'tp2_hit': False, 'tp3_hit': False
-            }
-            aktif_islemleri_kaydet(AKTIF_ISLEMLER)
-            SON_SINYALLER[ticker_symbol] = suan
-            GUNLUK_SINYAL_SAYISI += 1
-
-        elif sat_kosulu:
-            sl = round(fiyat * (1 + sl_rate), 4)
-            fark = sl - fiyat
-            tp1, tp2, tp3 = round(fiyat - fark, 4), round(fiyat - (fark * 2), 4), round(fiyat - (fark * 3), 4)
-            önerilen_lot = lot_hesapla(fiyat, sl, ticker_symbol)
-
-            mesaj = (
-                f"🚨 *PRO SCALP SİNYALİ (SHORT / SAT)*{hacim_etiketi} 🚨\n\n"
-                f"📌 *Parite:* {isim}\n"
-                f"🔴 *Satış Fiyatı:* `{fiyat}`\n"
-                f"💵 *Önerilen Lot (%1 Risk):* `{önerilen_lot} Lot`\n\n"
-                f"🎯 *TP1:* `{tp1}` | 🎯 *TP2:* `{tp2}` | 🎯 *TP3:* `{tp3}`\n"
-                f"🛡️ *Stop Loss:* `{sl}`\n\n"
-                f"💡 *Öneri:* TP1'e ulaştığında Stop Loss'u giriş seviyesine (`{fiyat}`) çekin.\n"
-                f"📊 *RSI:* `{rsi}` | 🔗 [TradingView Grafiği]({tv_link})"
-            )
-            telegram_mesaj_gonder(mesaj)
-
-            AKTIF_ISLEMLER[ticker_symbol] = {
-                'yon': 'SELL',
-                'entry': fiyat,
-                'tp1': tp1, 'tp2': tp2, 'tp3': tp3,
-                'sl': sl,
-                'tp1_hit': False, 'tp2_hit': False, 'tp3_hit': False
-            }
-            aktif_islemleri_kaydet(AKTIF_ISLEMLER)
-            SON_SINYALLER[ticker_symbol] = suan
-            GUNLUK_SINYAL_SAYISI += 1
-
-    except Exception as e:
-        print(f"{isim} hatası: {e}")
-
-def background_worker():
-    global GUNLUK_SINYAL_SAYISI, RAPOR_GONDERILDI, SON_SAATLIK_BILDIRIM
-    telegram_komutlari_ayarla()
-    telegram_mesaj_gonder("🚀 *ScalpBot Tam Güvenlikli Sürümle Başlatıldı!*\n`/test` komutunu yazarak bağlantıyı deneyebilirsiniz.")
+# --- SİMÜLASYON VE STRATEJİ MOTORU ---
+def piyasa_tarayici_worker():
+    global KASA
+    telegram_gonder("🚀 *Forex/Altın 1h Simülasyon Botu Başlatıldı!* ($3000 Sanal Kasa)")
 
     while True:
         try:
-            simdi = datetime.now()
-            suan_epoch = time.time()
-            borsa_acilis_kontrol()
+            if not haffacilik_kapali_mi():
+                # 1. Mevcut pozisyonları kontrol et (TP / SL vuruldu mu?)
+                aktifler = list(KASA["aktif_poz"].items())
+                for sembol, pos in aktifler:
+                    try:
+                        df = yf.Ticker(sembol).history(period="1d", interval=TIMEFRAME)
+                        if df.empty: continue
+                        anlik = round(df['Close'].iloc[-1], 4)
+                        yon = pos['yon']
+                        giris = pos['giris']
+                        sl = pos['sl']
+                        tp = pos['tp']
+                        isim = pos['isim']
 
-            if suan_epoch - SON_SAATLIK_BILDIRIM > 3600:
-                aktif_sayi = len(AKTIF_ISLEMLER)
-                saatlik_ozet = (
-                    f"🌟 *SCALPBOT SAATLİK DURUM RAPORU* ⏰\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"🟢 *Sistem:* Aktif ve tarama yapıyor\n"
-                    f"📊 *Günlük Üretilen Sinyal:* `{GUNLUK_SINYAL_SAYISI}`\n"
-                    f"📌 *Aktif Pozisyon / Takip:* `{aktif_sayi} adet`\n"
-                    f"💰 *Demo Kasa:* `${HESAP_BAKIYESI}`"
-                )
-                telegram_mesaj_gonder(saatlik_ozet)
-                SON_SAATLIK_BILDIRIM = suan_epoch
+                        kapatildi = False
+                        sonuc_msg = ""
+                        if yon == 'BUY':
+                            if anlik >= tp:
+                                kazanc = RISK_MIKTARI * 2  # 1:2 R/R varsayımı
+                                KASA["bakiye"] += kazanc
+                                sonuc_msg = f"✅ *TP HEDEFİ GELDİ (LONG)* | {isim}\nKapatma Fiyatı: `{anlik}` | Kâr: `+${kazanc}`"
+                                kapatildi = True
+                            elif anlik <= sl:
+                                KASA["bakiye"] -= RISK_MIKTARI
+                                sonuc_msg = f"❌ *STOP-LOSS PATLADI (LONG)* | {isim}\nKapatma Fiyatı: `{anlik}` | Zarar: `-${RISK_MIKTARI}`"
+                                kapatildi = True
+                        elif yon == 'SELL':
+                            if anlik <= tp:
+                                kazanc = RISK_MIKTARI * 2
+                                KASA["bakiye"] += kazanc
+                                sonuc_msg = f"✅ *TP HEDEFİ GELDİ (SHORT)* | {isim}\nKapatma Fiyatı: `{anlik}` | Kâr: `+${kazanc}`"
+                                kapatildi = True
+                            elif anlik >= sl:
+                                KASA["bakiye"] -= RISK_MIKTARI
+                                sonuc_msg = f"❌ *STOP-LOSS PATLADI (SHORT)* | {isim}\nKapatma Fiyatı: `{anlik}` | Zarar: `-${RISK_MIKTARI}`"
+                                kapatildi = True
 
-            if simdi.hour == 22 and not RAPOR_GONDERILDI:
-                telegram_mesaj_gonder(f"📈 *GÜNLÜK BÖLÜM RAPORU*\n\nBugün toplam `{GUNLUK_SINYAL_SAYISI}` adet kaliteli scalp sinyali üretildi.")
-                RAPOR_GONDERILDI = True
-            elif simdi.hour != 22:
-                RAPOR_GONDERILDI = False
+                        if kapatildi:
+                            del KASA["aktif_poz"][sembol]
+                            kasa_kaydet(KASA)
+                            telegram_gonder(f"{sonuc_msg}\n💰 Yeni Bakiye: `${KASA['bakiye']:,.2f}`")
+                    except Exception as e:
+                        print(f"Pozisyon kontrol hatası ({sembol}): {e}")
 
-            if not hafta_sonu_mu():
-                for ticker, isim_tuple in FOREX_PARITELERI.items():
-                    forex_parite_tara(ticker, isim_tuple)
-                    time.sleep(1)
+                # 2. Yeni sinyal ara (Açık pozisyon yoksa ilgili paritede)
+                for sembol, isim in PARITELER.items():
+                    if sembol in KASA["aktif_poz"]:
+                        continue
+                    try:
+                        df = yf.Ticker(sembol).history(period="5d", interval=TIMEFRAME)
+                        if len(df) < 30: continue
+                        
+                        df['EMA9'] = ta.trend.ema_indicator(df['Close'], window=9)
+                        df['EMA21'] = ta.trend.ema_indicator(df['Close'], window=21)
+                        df['RSI'] = ta.momentum.rsi(df['Close'], window=14)
+
+                        son = df.iloc[-1]
+                        onceki = df.iloc[-2]
+                        fiyat = round(son['Close'], 4)
+                        rsi = round(son['RSI'], 2)
+
+                        long_kosul = onceki['EMA9'] <= onceki['EMA21'] and son['EMA9'] > son['EMA21'] and rsi > 50
+                        short_kosul = onceki['EMA9'] >= onceki['EMA21'] and son['EMA9'] < son['EMA21'] and rsi < 50
+
+                        if long_kosul:
+                            sl = round(fiyat * 0.998, 4)
+                            tp = round(fiyat * 1.004, 4)
+                            KASA["aktif_poz"][sembol] = {"isim": isim, "yon": "BUY", "giris": fiyat, "sl": sl, "tp": tp}
+                            kasa_kaydet(KASA)
+                            telegram_gonder(
+                                f"🧪 *SİNYAL SİMÜLASYONU (LONG)* | {isim}\n"
+                                f"🟢 Giriş: `{fiyat}` | 🛑 SL: `{sl}` | 🎯 TP: `{tp}`\n"
+                                f"📊 RSI: `{rsi}`"
+                            )
+                        elif short_kosul:
+                            sl = round(fiyat * 1.002, 4)
+                            tp = round(fiyat * 0.996, 4)
+                            KASA["aktif_poz"][sembol] = {"isim": isim, "yon": "SELL", "giris": fiyat, "sl": sl, "tp": tp}
+                            kasa_kaydet(KASA)
+                            telegram_gonder(
+                                f"🧪 *SİNYAL SİMÜLASYONU (SHORT)* | {isim}\n"
+                                f"🔴 Giriş: `{fiyat}` | 🛑 SL: `{sl}` | 🎯 TP: `{tp}`\n"
+                                f"📊 RSI: `{rsi}`"
+                            )
+                    except Exception as e:
+                        pass
         except Exception as e:
-            print(f"Tarama Hatası: {e}")
+            print(f"Tarayıcı döngü hatası: {e}")
 
-        time.sleep(30)
+        time.sleep(300) # 5 dakikada bir tarar (1h mum içinde gereksiz yormaz)
 
 if __name__ == "__main__":
-    threading.Thread(target=telegram_komut_dinleyici, daemon=True).start()
-    threading.Thread(target=background_worker, daemon=True).start()
+    komutlari_ayarla()
+    threading.Thread(target=telegram_dinleyici, daemon=True).start()
+    threading.Thread(target=piyasa_tarayici_worker, daemon=True).start()
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
