@@ -231,7 +231,6 @@ def telegram_komut_dinleyici():
                         msg = update["message"]
                         incoming_chat_id = str(msg["chat"]["id"])
                         
-                        # GÜVENLİK FİLTRESİ: Sadece senin CHAT_ID'ne yanıt ver
                         if CHAT_ID and incoming_chat_id != str(CHAT_ID):
                             continue
 
@@ -413,4 +412,3 @@ if __name__ == "__main__":
     threading.Thread(target=background_worker, daemon=True).start()
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
-    
