@@ -16,7 +16,7 @@ app = Flask(__name__)
 def home():
     return jsonify({"status": "active", "service": "ScalpBot Pro"}), 200
 
-# Cron Job'un uyanık tutması için hafif endpoint (Spam bildirim kaldırıldı)
+# Cron Job'un uyanık tutması için hafif endpoint
 @app.route('/health', methods=['GET'])
 def health():
     return "OK"
@@ -268,7 +268,6 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
     isim, tv_symbol = isim_tuple
     suan = time.time()
 
-    # MÜKERRER İŞLEM ENGELİ: Paritede açık işlem varsa yeni sinyal arama!
     if ticker_symbol in AKTIF_ISLEMLER:
         try:
             ticker = yf.Ticker(ticker_symbol)
