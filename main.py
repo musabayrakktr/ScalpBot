@@ -316,7 +316,7 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
         tv_link = f"https://www.tradingview.com/chart/?symbol={tv_symbol}"
 
         simdi_utc = datetime.now(timezone.utc)
-        yuksek_hacim_saatleri =
+        yuksek_hacim_saatleri = {7, 8, 9, 13, 14, 15}
         hacim_etiketi = " 🔥 *[YÜKSEK HACİM]*" if simdi_utc.hour in yuksek_hacim_saatleri else ""
 
         if al_kosulu:
