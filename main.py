@@ -16,15 +16,9 @@ app = Flask(__name__)
 def home():
     return jsonify({"status": "active", "service": "ScalpBot Pro"}), 200
 
-# Cron Job'un uyanık tutması ve Telegram'a canlılık bildirimi atması için sadeleştirilmiş endpoint
+# Cron Job'un uyanık tutması için hafif endpoint (Spam bildirim kaldırıldı)
 @app.route('/health', methods=['GET'])
 def health():
-    try:
-        telegram_mesaj_gonder("✅ *ScalpBot Aktif* | Sistem tıkır tıkır piyasayı tarıyor...")
-    except Exception as e:
-        print(f"Health bildirim hatası: {e}")
-    
-    # cron-job.org'un 'output too large' hatasını tamamen engellemek için en hafif yanıt
     return "OK"
 
 # --- ENVIRONMENT VARIABLES (GÜVENLİK) ---
@@ -260,7 +254,7 @@ def telegram_komut_dinleyici():
                             telegram_mesaj_gonder(links, target_chat=incoming_chat_id)
                         elif text.startswith("/bakiye"):
                             try:
-                                yeni_bakiye = float(text.split()[1])
+                                yeni_bakiye = float(text.split())
                                 HESAP_BAKIYESI = yeni_bakiye
                                 telegram_mesaj_gonder(f"✅ *Hesap Bakiyesi Güncellendi!*\nYeni Kasa: `${HESAP_BAKIYESI}`", target_chat=incoming_chat_id)
                             except:
@@ -327,7 +321,7 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
         tv_link = f"https://www.tradingview.com/chart/?symbol={tv_symbol}"
 
         simdi_utc = datetime.now(timezone.utc)
-        hacim_etiketi = " 🔥 *[YÜKSEK HACİM]*" if simdi_utc.hour in [7, 8, 12, 13, 14] else ""
+        hacim_etiketi = " 🔥 *[YÜKSEK HACİM]*" if simdi_utc.hour in else ""
 
         if al_kosulu:
             sl = round(fiyat * (1 - sl_rate), 4)
