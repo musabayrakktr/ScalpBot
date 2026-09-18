@@ -1,12 +1,43 @@
+import os
 import time
 import requests
 import json
 import threading
 from datetime import datetime, timezone, timedelta
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from flask import Flask, render_template_string, jsonify
 import yfinance as yf
 import pandas as pd
 import ta
+
+# --- FLASK WEB SUNUCUSU (RENDER UYKU ENGELLEYİCİ) ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return render_template_string("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>ScalpBot Pro Status</title>
+        <style>
+            body { font-family: Arial, sans-serif; background: #121212; color: #fff; text-align: center; padding-top: 50px; }
+            .card { background: #1e1e1e; display: inline-block; padding: 20px 40px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+            .status { color: #00ff88; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h2>🚀 ScalpBot Pro Canlı Komut Merkezi</h2>
+            <p>Sistem Durumu: <span class="status">ÇALIŞIYOR 🟢</span></p>
+            <p>Render Ping & Webhook Servisi Aktif ve Uyanık!</p>
+        </div>
+    </body>
+    </html>
+    """)
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    return jsonify({"status": "success", "message": "Webhook received"}), 200
 
 # --- BAKIYE, RISK VE OTO-TRADE AYARLARI ---
 HESAP_BAKIYESI = 3000.0   # $3000 demo bakiyenle eşitledik
@@ -16,36 +47,9 @@ AUTO_TRADE_AKTIF = False # Varsayılan kapalı (Sadece Sinyal)
 # --- CANLI İŞLEM VE TP/SL TAKİP SÖZLÜĞÜ ---
 AKTIF_ISLEMLER = {}
 
-# --- RENDER WEB SUNUCUSU VE WEBHOOK ---
-class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-        self.wfile.write(b"ScalpBot Pro Active & Alive!")
-
-    def do_POST(self):
-        if self.path == '/webhook':
-            content_length = int(self.headers.get('Content-Length', 0))
-            post_data = self.rfile.read(content_length)
-            print(f"Webhook Alındı: {post_data.decode('utf-8')}")
-            self.send_response(200)
-            self.end_headers()
-        else:
-            self.send_response(404)
-            self.end_headers()
-
-def run_web_server():
-    try:
-        server_address = ('', 10000)
-        httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
-        httpd.serve_forever()
-    except Exception as e:
-        print(f"Web Sunucu Hatası: {e}")
-
 # --- AYARLAR VE PARİTELER ---
-TELEGRAM_TOKEN = "8814586618:AAFrQ2kCbjXf8XuWaJ2NK-gCXkL2_8ik81c"
-CHAT_ID = "8982017587"
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "8814586618:AAFrQ2kCbjXf8XuWaJ2NK-gCXkL2_8ik81c")
+CHAT_ID = os.environ.get("CHAT_ID", "8982017587")
 
 FOREX_PARITELERI = {
     "EURUSD=X": ("EUR/USD", "FX:EURUSD"),
@@ -118,7 +122,7 @@ def metatrader_signal_gonder(signal_data):
         print(f"Auto-Trade Webhook İletim Hatası: {e}")
 
 def haber_filtresi_aktif_mi():
-    """ Esnetilmiş Haber Filtresi (Sadece saat başı öncesi/sonrası 5'er dk esneklik) """
+    """ Esnetilmiş Haber Filtresi """
     simdi = datetime.now(timezone.utc)
     dakika = simdi.minute
     if (55 <= dakika <= 59) or (0 <= dakika <= 5):
@@ -396,37 +400,41 @@ def forex_parite_tara(ticker_symbol, isim_tuple):
     except Exception as e:
         print(f"{isim} hatası: {e}")
 
-# Servisleri Başlat
-threading.Thread(target=run_web_server, daemon=True).start()
-threading.Thread(target=telegram_komut_dinleyici, daemon=True).start()
-
-# Menü Komutlarını Otomatik Kaydet
-telegram_komutlari_ayarla()
-
-# Başlangıç Bildirimi
-telegram_mesaj_gonder("🚀 *ScalpBot Sistem Yeniden Başlatıldı!*\nKomut dinleyici, TP/SL canlı takibi ve sinyal taraması kesintisiz aktif.")
-
-# Ana Döngü
-while True:
-    simdi = datetime.now()
+def background_worker():
+    """ Arka planda pariteleri 7/24 tarayan ana motor """
+    global GUNLUK_SINYAL_SAYISI, RAPOR_GONDERILDI
     
-    borsa_acilis_kontrol()
+    # Menü Komutlarını Otomatik Kaydet
+    telegram_komutlari_ayarla()
+    
+    # Başlangıç Bildirimi
+    telegram_mesaj_gonder("🚀 *ScalpBot Flask Sunucusu Devrede!*\nUyku modu engelleyici ve canlı sinyal taraması kesintisiz aktif.")
 
-    if simdi.hour == 22 and not RAPOR_GONDERILDI:
-        telegram_mesaj_gonder(f"📈 *GÜNLÜK BÖLÜM RAPORU*\n\nBugün toplam `{GUNLUK_SINYAL_SAYISI}` adet kaliteli scalp sinyali üretildi.")
-        RAPOR_GONDERILDI = True
-    elif simdi.hour != 22:
-        RAPOR_GONDERILDI = False
+    while True:
+        try:
+            simdi = datetime.now()
+            borsa_acilis_kontrol()
 
-    if hafta_sonu_mu():
-        time.sleep(300)
-        continue
+            if simdi.hour == 22 and not RAPOR_GONDERILDI:
+                telegram_mesaj_gonder(f"📈 *GÜNLÜK BÖLÜM RAPORU*\n\nBugün toplam `{GUNLUK_SINYAL_SAYISI}` adet kaliteli scalp sinyali üretildi.")
+                RAPOR_GONDERILDI = True
+            elif simdi.hour != 22:
+                RAPOR_GONDERILDI = False
 
-    if not haber_filtresi_aktif_mi():
-        time.sleep(60)
-        continue
+            if not hafta_sonu_mu() and haber_filtresi_aktif_mi():
+                for ticker, isim_tuple in FOREX_PARITELERI.items():
+                    forex_parite_tara(ticker, isim_tuple)
+                    time.sleep(1)
 
-    for ticker, isim_tuple in FOREX_PARITELERI.items():
-        forex_parite_tara(ticker, isim_tuple)
-        time.sleep(1)
-    time.sleep(60)
+        except Exception as e:
+            print(f"Tarama Hatası: {e}")
+
+        time.sleep(30)
+
+# Yan Servisleri Başlat
+threading.Thread(target=telegram_komut_dinleyici, daemon=True).start()
+threading.Thread(target=background_worker, daemon=True).start()
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port, debug=False)
