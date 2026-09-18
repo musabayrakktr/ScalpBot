@@ -16,7 +16,7 @@ app = Flask(__name__)
 def home():
     return jsonify({"status": "active", "service": "ScalpBot Pro"}), 200
 
-# Cron Job'un uyanık tutması için hafif endpoint
+# Cron Job'un uyanık tutması için hafif endpoint (Spam bildirim kaldırıldı)
 @app.route('/health', methods=['GET'])
 def health():
     return "OK"
