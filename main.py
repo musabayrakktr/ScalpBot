@@ -3,7 +3,7 @@ import time
 import requests
 import json
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from flask import Flask, jsonify
 import yfinance as yf
 import pandas as pd
@@ -78,6 +78,7 @@ def komutlari_ayarla():
     commands = [
         {"command": "durum", "description": "💰 Sanal Kasa & Pozisyonlar"},
         {"command": "fiyat", "description": "📊 Anlık Forex/Altın Fiyat & RSI"},
+        {"command": "piyasa", "description": "⏰ Piyasa Açık/Kapalı Durumu"},
         {"command": "reset", "description": "🔄 Sanal Kasayı Sıfırla ($3000)"},
         {"command": "yardim", "description": "ℹ️ Komut Listesi"}
     ]
@@ -86,7 +87,25 @@ def komutlari_ayarla():
     except:
         pass
 
-haffacilik_kapali_mi = lambda: datetime.now(timezone.utc).weekday() >= 5 or (datetime.now(timezone.utc).weekday() == 4 and datetime.now(timezone.utc).hour >= 21)
+# Forex hafta sonu kontrolü (UTC: Cuma 21:00 - Pazar 21:00 arası kapalı)
+def piyasa_durumu_bilgisi():
+    now_utc = datetime.now(timezone.utc)
+    wd = now_utc.weekday() # 0: Pzt, 4: Cum, 5: Cmt, 6: Paz
+    hour = now_utc.hour
+
+    # Cuma 21:00 UTC sonrası veya Cumartesi tüm gün veya Pazar 21:00 UTC öncesi kapalı
+    kapali = False
+    durum_str = "🟢 **AÇIK (İşlem Yapılabilir)**"
+    detay = "Piyasalar aktif, sinyal taraması çalışıyor."
+
+    if wd == 5 or (wd == 4 and hour >= 21) or (wd == 6 and hour < 21):
+        kapali = True
+        durum_str = "🔴 **KAPALI (Hafta Sonu Tatili)**"
+        detay = "Forex/Altın piyasaları hafta sonu kapalıdır. Pazar 21:00 UTC'de açılır."
+
+    return durum_str, detay, kapali
+
+haffacilik_kapali_mi = lambda: piyasa_durumu_bilgisi()
 
 def telegram_dinleyici():
     global LAST_UPDATE_ID, KASA
@@ -114,6 +133,7 @@ def telegram_dinleyici():
                                 "🤖 *Forex/Altın Simülasyon Botu*\n\n"
                                 "• `/durum` - Sanal kasa ve pozisyonlar\n"
                                 "• `/fiyat` - Canlı fiyatlar ve 1h RSI\n"
+                                "• `/piyasa` - Piyasa açık/kapalı durumu\n"
                                 "• `/reset` - Kasayı $3000'a sıfırla"
                             )
                         elif txt == "/durum":
@@ -138,6 +158,17 @@ def telegram_dinleyici():
                                 except:
                                     rapor += f"• *{isim}*: Veri alınamadı\n"
                             telegram_gonder(rapor)
+                        elif txt == "/piyasa":
+                            durum, detay, _ = piyasa_durumu_bilgisi()
+                            utc_zamani = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+                            telegram_gorn = (
+                                f"⏰ *Global Piyasa Takvimi*\n"
+                                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                                f"Durum: {durum}\n"
+                                f"ℹ️ *Bilgi:* {detay}\n"
+                                f"🌐 *Sunucu Saati:* `{utc_zamani}`"
+                            )
+                            telegram_gonder(telegram_gorn)
                         elif txt == "/reset":
                             KASA = {"bakiye": 3000.0, "aktif_poz": {}}
                             kasa_kaydet(KASA)
@@ -153,13 +184,13 @@ def piyasa_tarayici_worker():
     while True:
         try:
             suan_epoch = time.time()
-            # 1 Saatte bir (3600 saniye) aktiflik / durum raporu at
             if suan_epoch - SON_SAATLIK_BILDIRIM > 3600:
                 aktif_sayi = len(KASA["aktif_poz"])
+                durum, _, _ = piyasa_durumu_bilgisi()
                 telegram_gonder(
                     f"🟢 *SCALPBOT SAATLİK DURUM RAPORU* ⏰\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"⚡ *Sistem:* Aktif ve tarama yapıyor\n"
+                    f"⚡ *Piyasa:* {durum}\n"
                     f"📌 *Aktif Pozisyon Sayısı:* `{aktif_sayi} adet`\n"
                     f"💰 *Demo Kasa:* `${KASA['bakiye']:,.2f}`"
                 )
@@ -198,7 +229,7 @@ def piyasa_tarayici_worker():
                                 kapatildi = True
                             elif anlik >= sl:
                                 KASA["bakiye"] -= RISK_MIKTARI
-                                sonuc_msg = f"❌ *STOP-LOSS PATLADI (SHORT)* | {isim}\nKapatma Fiyatı: `{anlik}` | Zarar: `-${RISK_MIKTARI}`"
+                                sonuc__msg = f"❌ *STOP-LOSS PATLADI (SHORT)* | {isim}\nKapatma Fiyatı: `{anlik}` | Zarar: `-${RISK_MIKTARI}`"
                                 kapatildi = True
 
                         if kapatildi:
