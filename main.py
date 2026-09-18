@@ -44,7 +44,6 @@ def kasa_kaydet(data):
 
 KASA = kasa_yukle()
 
-# Takip edilecek Forex / Altın pariteleri (yfinance sembolleri)
 PARITELER = {
     "EURUSD=X": "EUR/USD",
     "GBPUSD=X": "GBP/USD",
@@ -53,10 +52,10 @@ PARITELER = {
 }
 
 TIMEFRAME = "1h"
-RISK_MIKTARI = 150.0  # İşlem başına risk sanal $150
+RISK_MIKTARI = 150.0  
 LAST_UPDATE_ID = 0
+SON_SAATLIK_BILDIRIM = 0
 
-# --- TELEGRAM YARDIMCISI ---
 def telegram_gonder(mesaj):
     if not TELEGRAM_TOKEN or not CHAT_ID:
         return
@@ -72,7 +71,6 @@ def telegram_gonder(mesaj):
     except Exception as e:
         print(f"Telegram mesaj hatası: {e}")
 
-# --- MENÜ AYARI ---
 def komutlari_ayarla():
     if not TELEGRAM_TOKEN:
         return
@@ -88,10 +86,8 @@ def komutlari_ayarla():
     except:
         pass
 
-# --- HAFTA SONU KONTROLÜ (Forex kapalıdır) ---
 haffacilik_kapali_mi = lambda: datetime.now(timezone.utc).weekday() >= 5 or (datetime.now(timezone.utc).weekday() == 4 and datetime.now(timezone.utc).hour >= 21)
 
-# --- TELEGRAM KOMUT DİNLEYİCİ ---
 def telegram_dinleyici():
     global LAST_UPDATE_ID, KASA
     if not TELEGRAM_TOKEN:
@@ -150,15 +146,26 @@ def telegram_dinleyici():
             time.sleep(2)
         time.sleep(1)
 
-# --- SİMÜLASYON VE STRATEJİ MOTORU ---
 def piyasa_tarayici_worker():
-    global KASA
+    global KASA, SON_SAATLIK_BILDIRIM
     telegram_gonder("🚀 *Forex/Altın 1h Simülasyon Botu Başlatıldı!* ($3000 Sanal Kasa)")
 
     while True:
         try:
+            suan_epoch = time.time()
+            # 1 Saatte bir (3600 saniye) aktiflik / durum raporu at
+            if suan_epoch - SON_SAATLIK_BILDIRIM > 3600:
+                aktif_sayi = len(KASA["aktif_poz"])
+                telegram_gonder(
+                    f"🟢 *SCALPBOT SAATLİK DURUM RAPORU* ⏰\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"⚡ *Sistem:* Aktif ve tarama yapıyor\n"
+                    f"📌 *Aktif Pozisyon Sayısı:* `{aktif_sayi} adet`\n"
+                    f"💰 *Demo Kasa:* `${KASA['bakiye']:,.2f}`"
+                )
+                SON_SAATLIK_BILDIRIM = suan_epoch
+
             if not haffacilik_kapali_mi():
-                # 1. Mevcut pozisyonları kontrol et (TP / SL vuruldu mu?)
                 aktifler = list(KASA["aktif_poz"].items())
                 for sembol, pos in aktifler:
                     try:
@@ -175,7 +182,7 @@ def piyasa_tarayici_worker():
                         sonuc_msg = ""
                         if yon == 'BUY':
                             if anlik >= tp:
-                                kazanc = RISK_MIKTARI * 2  # 1:2 R/R varsayımı
+                                kazanc = RISK_MIKTARI * 2  
                                 KASA["bakiye"] += kazanc
                                 sonuc_msg = f"✅ *TP HEDEFİ GELDİ (LONG)* | {isim}\nKapatma Fiyatı: `{anlik}` | Kâr: `+${kazanc}`"
                                 kapatildi = True
@@ -201,7 +208,6 @@ def piyasa_tarayici_worker():
                     except Exception as e:
                         print(f"Pozisyon kontrol hatası ({sembol}): {e}")
 
-                # 2. Yeni sinyal ara (Açık pozisyon yoksa ilgili paritede)
                 for sembol, isim in PARITELER.items():
                     if sembol in KASA["aktif_poz"]:
                         continue
@@ -246,7 +252,7 @@ def piyasa_tarayici_worker():
         except Exception as e:
             print(f"Tarayıcı döngü hatası: {e}")
 
-        time.sleep(300) # 5 dakikada bir tarar
+        time.sleep(300)
 
 if __name__ == "__main__":
     komutlari_ayarla()
