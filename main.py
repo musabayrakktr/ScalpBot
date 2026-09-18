@@ -16,17 +16,16 @@ app = Flask(__name__)
 def home():
     return jsonify({"status": "active", "service": "ScalpBot Pro"}), 200
 
-# Cron Job'un uyanık tutmak ve 15 dk'da bir canlılık mesajı atmak için kullanacağı endpoint
+# Cron Job'un uyanık tutması ve Telegram'a canlılık bildirimi atması için sadeleştirilmiş endpoint
 @app.route('/health', methods=['GET'])
 def health():
     try:
-        # Cron Job her tetiklediğinde Telegram'a canlılık mesajı atar
         telegram_mesaj_gonder("✅ *ScalpBot Aktif* | Sistem tıkır tıkır piyasayı tarıyor...")
     except Exception as e:
         print(f"Health bildirim hatası: {e}")
     
-    # cron-job.org'un 'output too large' hatası vermemesi için çok minik yanıt döndürüyoruz
-    return "OK", 200
+    # cron-job.org'un 'output too large' hatasını tamamen engellemek için en hafif yanıt
+    return "OK"
 
 # --- ENVIRONMENT VARIABLES (GÜVENLİK) ---
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
