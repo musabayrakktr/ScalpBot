@@ -70,7 +70,7 @@ def telegram_gonder(mesaj):
     try:
         requests.post(url, json=payload, timeout=5)
     except Exception as e:
-        print(f"Telegram mesaj hatası: {e})"
+        print(f"Telegram mesaj hatası: {e}")
 
 # --- MENÜ AYARI ---
 def komutlari_ayarla():
@@ -246,7 +246,7 @@ def piyasa_tarayici_worker():
         except Exception as e:
             print(f"Tarayıcı döngü hatası: {e}")
 
-        time.sleep(300) # 5 dakikada bir tarar (1h mum içinde gereksiz yormaz)
+        time.sleep(300) # 5 dakikada bir tarar
 
 if __name__ == "__main__":
     komutlari_ayarla()
