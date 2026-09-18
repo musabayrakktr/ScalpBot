@@ -30,8 +30,8 @@ AKTIF_ISLEMLER = {}
 
 --- AYARLAR VE PARİTELER ---
 
-TELEGRAM_TOKEN = "8814586618:AAFrQ2kCbjXf8XuWaJ2NK-gCXkL2_8ik81c"
-CHAT_ID = "8982017587"
+TELEGRAM_TOKEN = YENİ_BOT_TOKENIN
+CHAT_ID = 8982017587
 
 FOREX_PARITELERI = {
 "EURUSD=X": ("EUR/USD", "FX:EURUSD"),
@@ -390,3 +390,10 @@ threading.Thread(target=background_worker, daemon=True).start()
 # Flask Web Sunucusunu Başlat (ApexBot Mimarisi)  
 port = int(os.environ.get("PORT", 10000))  
 app.run(host='0.0.0.0', port=port, debug=False)
+
+@app.route("/health")
+def health():
+    return jsonify({
+        "status": "ok",
+        "bot": "ScalpBot Pro"
+    }), 200
