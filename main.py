@@ -105,7 +105,7 @@ def telegram_poller():
                 "⚡ *SCALPRADAR TERMINAL v2.1*\n"
                 "──────────────────────────\n"
                 "🎯 *Komuta Merkezi Aktif!*\n\n"
-                "📋 *Mevcut Komutlar:\n"
+                "📋 *Mevcut Komutlar:*\n"
                 "• /durum — _Sanal kasa & piyasa nabzı_\n"
                 "• /fiyat — _Canlı parite akışı (EURUSD, XAUUSD, USDJPY, GBPUSD)_\n"
                 "• /reset — _Kasayı $3,000'a sıfırla_\n"
