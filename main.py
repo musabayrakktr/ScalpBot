@@ -198,7 +198,6 @@ def telegram_poller():
             send_telegram(chat_id, reply)
 
           elif text == "/reset":
-            global virtual_balance, open_positions
             virtual_balance = INITIAL_BALANCE
             open_positions.clear()
             reply = (
