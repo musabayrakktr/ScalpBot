@@ -105,9 +105,9 @@ def telegram_poller():
                 "⚡ *SCALPRADAR TERMINAL v2.1*\n"
                 "──────────────────────────\n"
                 "🎯 *Komuta Merkezi Aktif!*\n\n"
-                "📋 *Mevcut Komutlar:*\n"
+                "📋 *Mevcut Komutlar:\n"
                 "• /durum — _Sanal kasa & piyasa nabzı_\n"
-                "• /fiyat — _Canlı parite akışı_\n"
+                "• /fiyat — _Canlı parite akışı (EURUSD, XAUUSD, USDJPY, GBPUSD)_\n"
                 "• /reset — _Kasayı $3,000'a sıfırla_\n"
                 "──────────────────────────"
             )
@@ -116,9 +116,9 @@ def telegram_poller():
           elif text == "/durum":
             status_str, time_str = get_market_status()
             status_line = (
-                f"{status_str} *(Kapanış: {time_str}*) dakikada"
+                f"{status_str} *(Kapanış: {time_str}*)"
                 if status_str == "🟢 AKTİF"
-                else f"{status_str} *(Açılış: {time_str}*) bekliyor"
+                else f"{status_str} *(Açılış: {time_str}*)"
             )
 
             pnl_diff = virtual_balance - INITIAL_BALANCE
