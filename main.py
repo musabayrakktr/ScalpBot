@@ -1,4 +1,4 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import threading
 import time
@@ -11,9 +11,22 @@ import yfinance as yf
 app = Flask(__name__)
 
 
-@app.route("/")
+# --- HEALTHCHECK & KEEP-ALIVE (Render 404 / Spin-Down Çözümü) ---
+@app.route("/", methods=["GET"])
+@app.route("/health", methods=["GET"])
+@app.route("/ping", methods=["GET"])
 def health_check():
-  return "ScalpBot is alive!", 200
+  status_str, _ = get_market_status()
+  return (
+      {
+          "status": "alive",
+          "market": status_str,
+          "balance": virtual_balance,
+          "open_positions": len(open_positions),
+          "timestamp": time.time(),
+      },
+      200,
+  )
 
 
 TELEGRAM_TOKEN = os.getenv(
@@ -119,7 +132,7 @@ def telegram_poller():
       resp = requests.get(
           url, params={"offset": offset, "timeout": 20}, timeout=25
       )
-      if resp.status_code == 200:
+      if resp.status_status == 200 or resp.status_code == 200:
         data = resp.json()
         for update in data.get("result", []):
           offset = update["update_id"] + 1
@@ -156,14 +169,17 @@ def telegram_poller():
             pnl_diff = virtual_balance - INITIAL_BALANCE
             pnl_emoji = "🟢" if pnl_diff >= 0 else "🔴"
             pnl_str = (
-                f"+${pnl_diff:,.2f}" if pnl_diff >= 0 else f"-${abs(pnl_diff):,.2f}"
+                f"+${pnl_diff:,.2f}"
+                if pnl_diff >= 0
+                else f"-${abs(pnl_diff):,.2f}"
             )
 
             if open_positions:
               pos_lines = []
               for p in open_positions:
                 pos_lines.append(
-                    f"▪️ `{p['symbol']}` | *{p['action']}* | {p.get('lot', 1.0)} Lot | G: `{p['price']}`"
+                    f"▪️ `{p['symbol']}` | *{p['action']}* | {p.get('lot', 1.0)}"
+                    f" Lot | G: `{p['price']}`"
                 )
               pos_str = "\n".join(pos_lines)
             else:
@@ -172,7 +188,8 @@ def telegram_poller():
             reply = (
                 f"🛡️ *SANAL KASA & RİSK RAPORU*\n"
                 f"──────────────────────────\n"
-                f"💵 *Bakiye:* `${virtual_balance:,.2f}`  {pnl_emoji} `({pnl_str})`\n"
+                f"💵 *Bakiye:* `${virtual_balance:,.2f}`  {pnl_emoji}"
+                f" `({pnl_str})`\n"
                 f"📡 *Piyasa:* {status_line}\n\n"
                 f"📂 *Açık Pozisyonlar:*\n{pos_str}\n"
                 f"──────────────────────────"
@@ -236,7 +253,9 @@ def evaluate_scalp_strategy(symbol):
   last_ema21 = float(ema21.iloc[-1])
   prev_ema21 = float(ema21.iloc[-2])
   last_rsi = float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else 50.0
-  last_atr = float(atr.iloc[-1]) if not pd.isna(atr.iloc[-1]) else (last_close * 0.001)
+  last_atr = (
+      float(atr.iloc[-1]) if not pd.isna(atr.iloc[-1]) else (last_close * 0.001)
+  )
 
   action = None
   if prev_ema9 <= prev_ema21 and last_ema9 > last_ema21 and 45 < last_rsi < 70:
@@ -254,11 +273,12 @@ def evaluate_scalp_strategy(symbol):
       sl = round(last_close + sl_dist, 5)
       tp = round(last_close - tp_dist, 5)
 
-    # Agresif Demo Lot Hesabı ($3,000 kasa için %5 risk + yüksek hacim ölçeği)
     sl_diff = abs(last_close - sl)
-    pip_mult = 100.0 if "JPY" in symbol else (10.0 if symbol == "XAUUSD" else 10000.0)
+    pip_mult = (
+        100.0 if "JPY" in symbol else (10.0 if symbol == "XAUUSD" else 10000.0)
+    )
     pip_val = sl_diff * pip_mult
-    risk_target = virtual_balance * 0.05  # %5 agresif risk
+    risk_target = virtual_balance * 0.05
     raw_lot = (risk_target / pip_val) * 2.5 if pip_val > 0 else 1.0
     lot_size = round(max(0.5, min(raw_lot, 5.0)), 2)
 
@@ -302,7 +322,12 @@ def bot_loop():
                 "time": datetime.now().strftime("%H:%M"),
             })
 
-            emoji_map = {"EURUSD": "💶", "XAUUSD": "🥇", "USDJPY": "💱", "GBPUSD": "💷"}
+            emoji_map = {
+                "EURUSD": "💶",
+                "XAUUSD": "🥇",
+                "USDJPY": "💱",
+                "GBPUSD": "💷",
+            }
             em = emoji_map.get(symbol, "⚡")
             reply = (
                 f"🚨 *15M VIP SCALP SİNYALİ* {em}\n"
