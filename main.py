@@ -16,21 +16,20 @@ def health_check():
   return "ScalpBot is alive!", 200
 
 
-# Env okuma (Render env'deki key adlarıyla uyumlu)
 TELEGRAM_TOKEN = os.getenv(
     "TELEGRAM_TOKEN", os.getenv("TELEGRAM_BOT_TOKEN", "")
 )
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 SYMBOLS = {
-    "EURUSD": "EURUSD=X",
-    "XAUUSD": "GC=F",
-    "USDJPY": "USDJPY=X",
-    "GBPUSD": "GBPUSD=X",
+    "EURUSD": ("EURUSD=X", "💶"),
+    "XAUUSD": ("GC=F", "🥇"),
+    "USDJPY": ("USDJPY=X", "💱"),
+    "GBPUSD": ("GBPUSD=X", "💷"),
 }
 
-# Sanal kasa durumu hafızası
 virtual_balance = 3000.0
+INITIAL_BALANCE = 3000.0
 open_positions = []
 
 
@@ -51,7 +50,10 @@ def send_telegram(chat_id, text):
 
 
 def fetch_live_price(symbol_key):
-  ticker = SYMBOLS.get(symbol_key, "EURUSD=X")
+  ticker_info = SYMBOLS.get(symbol_key)
+  if not ticker_info:
+    return None
+  ticker = ticker_info[0]
   try:
     data = yf.Ticker(ticker).history(period="1d", interval="1h")
     if data is not None and not data.empty:
@@ -64,20 +66,17 @@ def fetch_live_price(symbol_key):
 def get_market_status():
   tr_tz = timezone(timedelta(hours=3))
   now = datetime.now(tr_tz)
-  weekday = now.weekday()  # 0=Pazartesi, ..., 5=Cumartesi, 6=Pazar
+  weekday = now.weekday()
   hour = now.hour
 
-  if weekday == 5:
-    return "🔴 KAPALI", "Pazartesi 00:00 (TR)"
-  elif weekday == 6:
-    return "🔴 KAPALI", "Pazartesi 00:00 (TR)"
-  elif weekday == 4 and hour >= 23:
+  if weekday == 5 or weekday == 6 or (weekday == 4 and hour >= 23):
     return "🔴 KAPALI", "Pazartesi 00:00 (TR)"
   else:
     return "🟢 AKTİF", "Cuma 23:00 (TR)"
 
 
 def telegram_poller():
+  global virtual_balance, open_positions
   if not TELEGRAM_TOKEN:
     print("TELEGRAM_TOKEN bulunamadı, poller başlatılmıyor.")
     return
@@ -89,7 +88,7 @@ def telegram_poller():
   while True:
     try:
       resp = requests.get(
-          url, params={"offset": offset, "timeout": 30}, timeout=35
+          url, params={"offset": offset, "timeout": 20}, timeout=25
       )
       if resp.status_code == 200:
         data = resp.json()
@@ -101,37 +100,86 @@ def telegram_poller():
           chat_id = msg.get("chat", {}).get("id")
           text = msg.get("text", "").strip()
 
-          if text == "/durum":
+          if text == "/start":
+            reply = (
+                "⚡ *SCALPRADAR TERMINAL v2.1*\n"
+                "──────────────────────────\n"
+                "🎯 *Komuta Merkezi Aktif!*\n\n"
+                "📋 *Mevcut Komutlar:*\n"
+                "• /durum — _Sanal kasa & piyasa nabzı_\n"
+                "• /fiyat — _Canlı parite akışı_\n"
+                "• /reset — _Kasayı $3,000'a sıfırla_\n"
+                "──────────────────────────"
+            )
+            send_telegram(chat_id, reply)
+
+          elif text == "/durum":
             status_str, time_str = get_market_status()
             status_line = (
-                f"{status_str} (Kapanış/Açılış: {time_str})"
+                f"{status_str} *(Kapanış: {time_str}*) dakikada"
                 if status_str == "🟢 AKTİF"
-                else f"{status_str} (Açılış: {time_str})"
+                else f"{status_str} *(Açılış: {time_str}*) bekliyor"
             )
-            pos_str = (
-                "\n".join([
-                    f"- {p['symbol']} {p['action']} @ {p['price']}"
-                    for p in open_positions
-                ])
-                if open_positions
-                else "Açık pozisyon yok."
+
+            pnl_diff = virtual_balance - INITIAL_BALANCE
+            pnl_emoji = "🟢" if pnl_diff >= 0 else "🔴"
+            pnl_str = (
+                f"+${pnl_diff:,.2f}" if pnl_diff >= 0 else f"-${abs(pnl_diff):,.2f}"
             )
+
+            if open_positions:
+              pos_lines = []
+              for p in open_positions:
+                pos_lines.append(
+                    f"▪️ `{p['symbol']}` | *{p['action']}* | G: `{p['price']}`"
+                )
+              pos_str = "\n".join(pos_lines)
+            else:
+              pos_str = "💤 _Aktif pozisyon bulunmuyor._"
+
             reply = (
-                f"💰 *Sanal Kasa & Pozisyonlar*\n"
-                f"Kasa: `${virtual_balance:,.2f}`\n"
-                f"Piyasa: {status_line}\n\n"
-                f"*Pozisyonlar:*\n{pos_str}"
+                f"🛡️ *SANAL KASA & RİSK RAPORU*\n"
+                f"──────────────────────────\n"
+                f"💵 *Bakiye:* `${virtual_balance:,.2f}`  {pnl_emoji} `({pnl_str})`\n"
+                f"📡 *Piyasa:* {status_line}\n\n"
+                f"📂 *Açık Pozisyonlar:*\n{pos_str}\n"
+                f"──────────────────────────"
             )
             send_telegram(chat_id, reply)
+
           elif text == "/fiyat":
-            prices_str = "\n".join([
-                f"{s}: `{fetch_live_price(s)}`" for s in SYMBOLS.keys()
-            ])
-            reply = f"📊 *Anlık Fiyatlar*\n{prices_str}"
+            status_str, _ = get_market_status()
+            lines = []
+            for s, (ticker_code, emoji) in SYMBOLS.items():
+              val = fetch_live_price(s)
+              val_str = f"`{val}`" if val is not None else "`Veri Yok`"
+              lines.append(f"{emoji} *{s}*: {val_str}")
+
+            prices_block = "\n".join(lines)
+            reply = (
+                f"📈 *CANLI PİYASA AKIŞI*\n"
+                f"──────────────────────────\n"
+                f"{status_str} — Anlık Fiyatlar:\n\n"
+                f"{prices_block}\n"
+                f"──────────────────────────"
+            )
             send_telegram(chat_id, reply)
+
+          elif text == "/reset":
+            virtual_balance = INITIAL_BALANCE
+            open_positions.clear()
+            reply = (
+                f"🔄 *KASA SIFIRLANDI*\n"
+                f"──────────────────────────\n"
+                f"⚠️ Sanal bakiye **$3,000.00** seviyesine resetlendi.\n"
+                f"🗑️ Tüm açık pozisyonlar temizlendi.\n"
+                f"──────────────────────────"
+            )
+            send_telegram(chat_id, reply)
+
     except Exception as e:
-        print(f"Telegram polling err: {e}")
-    time.sleep(3)
+      print(f"Telegram polling err: {e}")
+    time.sleep(2)
 
 
 def bot_loop():
