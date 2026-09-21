@@ -2,7 +2,7 @@ from datetime import datetime, timezone, timedelta
 import os
 import threading
 import time
-from flask import Flask, request
+from flask import Flask
 import numpy as np
 import pandas as pd
 import requests
@@ -11,68 +11,9 @@ import yfinance as yf
 app = Flask(__name__)
 
 
-# --- HEALTHCHECK & KEEP-ALIVE ---
-@app.route("/", methods=["GET"])
-@app.route("/health", methods=["GET"])
-@app.route("/ping", methods=["GET"])
+@app.route("/")
 def health_check():
-  status_str, _ = get_market_status()
-  return (
-      {
-          "status": "alive",
-          "market": status_str,
-          "balance": virtual_balance,
-          "open_positions": len(open_positions),
-          "timestamp": time.time(),
-      },
-      200,
-  )
-
-
-@app.route("/webhook", methods=["POST"])
-def tradingview_webhook():
-  global virtual_balance, open_positions
-  data = request.get_json(silent=True)
-  if not data:
-    return {"status": "error", "message": "JSON yok"}, 400
-
-  action_raw = str(data.get("action", "")).upper()
-  symbol = str(data.get("symbol", "GBPUSD")).upper()
-  lot = float(data.get("lot", 1.0))
-  price = float(data.get("price", 1.33700))
-  sl = float(data.get("sl", price - 0.001))
-  tp = float(data.get("tp", price + 0.003))
-
-  action_str = (
-      "LONG (BUY)"
-      if ("BUY" in action_raw or "LONG" in action_raw)
-      else "SHORT (SELL)"
-  )
-
-  open_positions.append({
-      "symbol": symbol,
-      "action": action_str,
-      "price": price,
-      "sl": sl,
-      "tp": tp,
-      "lot": lot,
-      "time": datetime.now().strftime("%H:%M"),
-  })
-
-  emoji_map = {"EURUSD": "💶", "XAUUSD": "🥇", "USDJPY": "💱", "GBPUSD": "💷"}
-  em = emoji_map.get(symbol, "⚡")
-  reply = (
-      f"🚨 *WEBHOOK DEMO İŞLEM* {em}\n"
-      f"──────────────────────────\n"
-      f"🎯 *Parite:* `{symbol}`\n"
-      f"⚡ *Yön:* *{action_str}*\n"
-      f"📦 *Lot:* `{lot} Lot`\n"
-      f"🏷️ *Giriş:* `{price}` | 🛑 *SL:* `{sl}` | 🎯 *TP:* `{tp}`\n"
-      f"──────────────────────────\n"
-      f"💡 *Sanal kasaya webhook ile eklendi.*"
-  )
-  broadcast_telegram(reply)
-  return {"status": "success", "added": symbol}, 200
+  return "ScalpBot is alive!", 200
 
 
 TELEGRAM_TOKEN = os.getenv(
@@ -193,13 +134,12 @@ def telegram_poller():
 
           if text == "/start":
             reply = (
-                "⚡ *SCALPRADAR TERMINAL v2.2*\n"
+                "⚡ *SCALPRADAR TERMINAL v2.1*\n"
                 "──────────────────────────\n"
                 "🎯 *Komuta Merkezi Aktif!*\n\n"
                 "📋 *Mevcut Komutlar:*\n"
                 "• /durum — _Sanal kasa & piyasa nabzı_\n"
-                "• /fiyat — _Canlı parite akışı (EURUSD, XAUUSD, USDJPY,"
-                " GBPUSD)_\n"
+                "• /fiyat — _Canlı parite akışı (EURUSD, XAUUSD, USDJPY, GBPUSD)_\n"
                 "• /reset — _Kasayı $3,000'a sıfırla_\n"
                 "──────────────────────────"
             )
@@ -216,17 +156,14 @@ def telegram_poller():
             pnl_diff = virtual_balance - INITIAL_BALANCE
             pnl_emoji = "🟢" if pnl_diff >= 0 else "🔴"
             pnl_str = (
-                f"+${pnl_diff:,.2f}"
-                if pnl_diff >= 0
-                else f"-${abs(pnl_diff):,.2f}"
+                f"+${pnl_diff:,.2f}" if pnl_diff >= 0 else f"-${abs(pnl_diff):,.2f}"
             )
 
             if open_positions:
               pos_lines = []
               for p in open_positions:
                 pos_lines.append(
-                    f"▪️ `{p['symbol']}` | *{p['action']}* | {p.get('lot', 1.0)}"
-                    f" Lot | G: `{p['price']}`"
+                    f"▪️ `{p['symbol']}` | *{p['action']}* | G: `{p['price']}`"
                 )
               pos_str = "\n".join(pos_lines)
             else:
@@ -235,8 +172,7 @@ def telegram_poller():
             reply = (
                 f"🛡️ *SANAL KASA & RİSK RAPORU*\n"
                 f"──────────────────────────\n"
-                f"💵 *Bakiye:* `${virtual_balance:,.2f}`  {pnl_emoji}"
-                f" `({pnl_str})`\n"
+                f"💵 *Bakiye:* `${virtual_balance:,.2f}`  {pnl_emoji} `({pnl_str})`\n"
                 f"📡 *Piyasa:* {status_line}\n\n"
                 f"📂 *Açık Pozisyonlar:*\n{pos_str}\n"
                 f"──────────────────────────"
@@ -300,9 +236,7 @@ def evaluate_scalp_strategy(symbol):
   last_ema21 = float(ema21.iloc[-1])
   prev_ema21 = float(ema21.iloc[-2])
   last_rsi = float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else 50.0
-  last_atr = (
-      float(atr.iloc[-1]) if not pd.isna(atr.iloc[-1]) else (last_close * 0.001)
-  )
+  last_atr = float(atr.iloc[-1]) if not pd.isna(atr.iloc[-1]) else (last_close * 0.001)
 
   action = None
   if prev_ema9 <= prev_ema21 and last_ema9 > last_ema21 and 45 < last_rsi < 70:
@@ -320,15 +254,6 @@ def evaluate_scalp_strategy(symbol):
       sl = round(last_close + sl_dist, 5)
       tp = round(last_close - tp_dist, 5)
 
-    sl_diff = abs(last_close - sl)
-    pip_mult = (
-        100.0 if "JPY" in symbol else (10.0 if symbol == "XAUUSD" else 10000.0)
-    )
-    pip_val = sl_diff * pip_mult
-    risk_target = virtual_balance * 0.05
-    raw_lot = (risk_target / pip_val) * 2.5 if pip_val > 0 else 1.0
-    lot_size = round(max(0.5, min(raw_lot, 5.0)), 2)
-
     return {
         "symbol": symbol,
         "action": action,
@@ -337,77 +262,16 @@ def evaluate_scalp_strategy(symbol):
         "tp": tp,
         "rsi": round(last_rsi, 1),
         "atr": round(last_atr, 5),
-        "lot": lot_size,
     }
   return None
 
 
 def bot_loop():
   global virtual_balance, open_positions
-  print("ScalpBot 15m strateji & SL/TP döngüsü devrede...")
+  print("ScalpBot 15m strateji döngüsü devrede...")
   while True:
     try:
       status_str, _ = get_market_status()
-
-      # 1. Açık pozisyonları canlı fiyatla kontrol et (TP/SL taraması)
-      if open_positions:
-        remaining_positions = []
-        for p in open_positions:
-          curr_price = fetch_live_price(p["symbol"])
-          closed = False
-          reason = ""
-          pnl_change = 0.0
-
-          if curr_price is not None:
-            pip_mult = (
-                100.0
-                if "JPY" in p["symbol"]
-                else (10.0 if p["symbol"] == "XAUUSD" else 10000.0)
-            )
-            lot = p.get("lot", 1.0)
-            if "LONG" in p["action"]:
-              if curr_price <= p["sl"]:
-                closed, reason = True, "🛑 STOP-LOSS (SL)"
-                pnl_change = -(abs(curr_price - p["price"]) * pip_mult * lot)
-              elif curr_price >= p["tp"]:
-                closed, reason = True, "🎯 TAKE-PROFIT (TP)"
-                pnl_change = abs(curr_price - p["price"]) * pip_mult * lot
-            else:  # SHORT
-              if curr_price >= p["sl"]:
-                closed, reason = True, "🛑 STOP-LOSS (SL)"
-                pnl_change = -(abs(curr_price - p["price"]) * pip_mult * lot)
-              elif curr_price <= p["tp"]:
-                closed, reason = True, "🎯 TAKE-PROFIT (TP)"
-                pnl_change = abs(curr_price - p["price"]) * pip_mult * lot
-
-          if closed:
-            virtual_balance += pnl_change
-            emoji_map = {
-                "EURUSD": "💶",
-                "XAUUSD": "🥇",
-                "USDJPY": "💱",
-                "GBPUSD": "💷",
-            }
-            em = emoji_map.get(p["symbol"], "⚡")
-            pnl_str = (
-                f"+${pnl_change:,.2f}"
-                if pnl_change >= 0
-                else f"-${abs(pnl_change):,.2f}"
-            )
-            broadcast_telegram(
-                f"{reason} {em}\n"
-                f"──────────────────────────\n"
-                f"🎯 *Parite:* `{p['symbol']}` | *Yön:* {p['action']}\n"
-                f"🏷️ *Kapanış Fiyatı:* `{curr_price}`\n"
-                f"💰 *PnL:* `({pnl_str})`\n"
-                f"💵 *Yeni Bakiye:* `${virtual_balance:,.2f}`\n"
-                f"──────────────────────────"
-            )
-          else:
-            remaining_positions.append(p)
-        open_positions = remaining_positions
-
-      # 2. Yeni sinyal taraması (Piyasa aktifse)
       if status_str == "🟢 AKTİF":
         for symbol in SYMBOLS.keys():
           now_ts = time.time()
@@ -417,40 +281,34 @@ def bot_loop():
           sig = evaluate_scalp_strategy(symbol)
           if sig:
             last_signal_time[symbol] = now_ts
-            risk_amount = virtual_balance * 0.05
+            risk_amount = virtual_balance * 0.015
             open_positions.append({
                 "symbol": symbol,
                 "action": sig["action"],
                 "price": sig["price"],
                 "sl": sig["sl"],
                 "tp": sig["tp"],
-                "lot": sig["lot"],
                 "risk_usd": round(risk_amount, 2),
                 "time": datetime.now().strftime("%H:%M"),
             })
 
-            emoji_map = {
-                "EURUSD": "💶",
-                "XAUUSD": "🥇",
-                "USDJPY": "💱",
-                "GBPUSD": "💷",
-            }
+            emoji_map = {"EURUSD": "💶", "XAUUSD": "🥇", "USDJPY": "💱", "GBPUSD": "💷"}
             em = emoji_map.get(symbol, "⚡")
             reply = (
                 f"🚨 *15M VIP SCALP SİNYALİ* {em}\n"
                 f"──────────────────────────\n"
                 f"🎯 *Parite:* `{sig['symbol']}`\n"
                 f"⚡ *Yön:* *{sig['action']}*\n"
-                f"📦 *Lot Boyutu:* `{sig['lot']} Lot`\n"
                 f"🏷️ *Giriş Fiyatı:* `{sig['price']}`\n"
                 f"🛑 *Stop-Loss (1.5xATR):* `{sig['sl']}`\n"
                 f"🎯 *Take-Profit (3.0xATR):* `{sig['tp']}`\n"
                 f"📊 *RSI(14):* `{sig['rsi']}` | *ATR:* `{sig['atr']}`\n"
-                f"💰 *Simüle Risk:* `${risk_amount:,.2f}`\n"
+                f"💰 *Simüle Risk:* `${risk_amount:,.2f}` (1:2 R:R)\n"
                 f"──────────────────────────\n"
                 f"💡 *Sanal kasaya işlendi.*"
             )
             broadcast_telegram(reply)
+            print(f"VIP Sinyal üretildi ve işlendi: {sig}")
       else:
         print("Piyasa kapalı, tarama es geçiliyor...")
     except Exception as e:
