@@ -30,21 +30,21 @@ def kasa_yukle():
 def kasa_kaydet(data):
     try:
         with open(SANAL_KASA_FILE, "w") as f:
-            json.dump(data, f, indent=4)
+            json.dump(data, f, indent+4 if False else 4)
     except Exception:
         pass
 
 KASA = kasa_yukle()
 
 PARITELER = {
-    "EURUSD=X": "EUR/USD",
-    "GBPUSD=X": "GBP/USD",
-    "GC=F": "XAU/USD (Altın)",
-    "USDJPY=X": "USD/JPY"
+    "EURUSD=X": {"isim": "EUR/USD", "kontrat": 100000, "pip_carpan": 0.0001},
+    "GBPUSD=X": {"isim": "GBP/USD", "kontrat": 100000, "pip_carpan": 0.0001},
+    "GC=F": {"isim": "XAU/USD (Altın)", "kontrat": 100, "pip_carpan": 0.1},
+    "USDJPY=X": {"isim": "USD/JPY", "kontrat": 100000, "pip_carpan": 0.01}
 }
 
 TIMEFRAME = "15m"
-RISK_MIKTARI = 150.0
+RISK_YUZDESI = 0.02  # Kasanın %2'si risk edilir ($60 / $3,000)
 SON_SAATLIK_ZAMAN = 0
 
 def telegram_gonder(mesaj):
@@ -62,17 +62,33 @@ def telegram_gonder(mesaj):
     except Exception:
         pass
 
+def lot_hesapla(bakiye, giris, sl, sembol_info):
+    try:
+        risk_dolar = bakiye * RISK_YUZDESI
+        fark = abs(giris - sl)
+        if fark == 0:
+            return 0.01
+        
+        kontrat = sembol_info["kontrat"]
+        # Zarar edilen miktar = Lot * kontrat * fiyat_farkı
+        lot = risk_dolar / (fark * kontrat)
+        # Broker standartlarına göre yuvarla (en az 0.01 lot)
+        lot = max(0.01, round(lot, 2))
+        return lot
+    except Exception:
+        return 0.01
+
 def piyasa_tarayici():
     global KASA, SON_SAATLIK_ZAMAN
     telegram_gonder(
-        f"🟢 *Scalp Bot & Saatlik Rapor Sistemi Aktif!*\n"
-        f"Başlangıç Kasa: `${KASA['bakiye']:,.2f}` | Risk/Poz: `${RISK_MIKTARI}`"
+        f"🟢 *Dinamik Lot & Scalp Bot Aktif!*\n"
+        f"Başlangıç Kasa: `${KASA['bakiye']:,.2f}` | Risk Oranı: `%{RISK_YUZDESI*100}`"
     )
     
     while True:
         simdiki_zaman = time.time()
         
-        # 1. SAAT BAŞI HATIRLATICI & DURUM RAPORu (Her 3600 sn / 1 saat)
+        # 1. SAAT BAŞI HATIRLATICI & DURUM RAPORU
         if simdiki_zaman - SON_SAATLIK_ZAMAN >= 3600:
             aktif_sayi = len(KASA["aktif_poz"])
             telegram_gonder(
@@ -92,28 +108,31 @@ def piyasa_tarayici():
                     df = yf.Ticker(sembol).history(period="1d", interval=TIMEFRAME)
                     if df.empty: continue
                     anlik = round(float(df['Close'].iloc[-1]), 4)
-                    yon, sl, tp, isim = pos['yon'], pos['sl'], pos['tp'], pos['isim']
+                    yon, sl, tp, isim, lot = pos['yon'], pos['sl'], pos['tp'], pos['isim'], pos.get('lot', 0.1)
 
                     kapatildi, sonuc_msg = False, ""
+                    risk_tutar = KASA["bakiye"] * RISK_YUZDESI # Yaklaşık baz
                     if yon == 'BUY':
                         if anlik >= tp:
-                            kazanc = RISK_MIKTARI * 2.0
+                            kazanc = risk_tutar * 2.0
                             KASA["bakiye"] += kazanc
-                            sonuc_msg = f"✅ *TP OLDU (LONG)* | {isim}\nKapatma: `{anlik}` | Kâr: `+${kazanc:,.2f}`"
+                            sonuc_msg = f"✅ *TP OLDU (LONG)* | {isim} ({lot} lot)\nKapatma: `{anlik}` | Kâr: `+${kazanc:,.2f}`"
                             kapatildi = True
                         elif anlik <= sl:
-                            KASA["bakiye"] -= RISK_MIKTARI
-                            sonuc_msg = f"❌ *SL PATLADI (LONG)* | {isim}\nKapatma: `{anlik}` | Zarar: `-${RISK_MIKTARI}`"
+                            Zarar = risk_tutar
+                            KASA["bakiye"] -= Zarar
+                            sonuc_msg = f"❌ *SL PATLADI (LONG)* | {isim} ({lot} lot)\nKapatma: `{anlik}` | Zarar: `-${Zarar:,.2f}`"
                             kapatildi = True
                     elif yon == 'SELL':
                         if anlik <= tp:
-                            kazanc = RISK_MIKTARI * 2.0
+                            kazanc = risk_tutar * 2.0
                             KASA["bakiye"] += kazanc
-                            sonuc_msg = f"✅ *TP OLDU (SHORT)* | {isim}\nKapatma: `{anlik}` | Kâr: `+${kazanc:,.2f}`"
+                            sonuc_msg = f"✅ *TP OLDU (SHORT)* | {isim} ({lot} lot)\nKapatma: `{anlik}` | Kâr: `+${kazanc:,.2f}`"
                             kapatildi = True
                         elif anlik >= sl:
-                            KASA["bakiye"] -= RISK_MIKTARI
-                            sonuc_msg = f"❌ *SL PATLADI (SHORT)* | {isim}\nKapatma: `[anlik]` | Zarar: `-${RISK_MIKTARI}`".replace('[anlik]', str(anlik))
+                            Zarar = risk_tutar
+                            KASA["bakiye"] -= Zarar
+                            sonuc_msg = f"❌ *SL PATLADI (SHORT)* | {isim} ({lot} lot)\nKapatma: `{anlik}` | Zarar: `-${Zarar:,.2f}`"
                             kapatildi = True
 
                     if kapatildi:
@@ -123,8 +142,9 @@ def piyasa_tarayici():
                 except Exception:
                     pass
 
-            # 3. Yeni Sinyal Taraması (Mum yönü değişimi)
-            for sembol, isim in PARITELER.items():
+            # 3. Yeni Sinyal Taraması + Dinamik Lot Hesaplama
+            for sembol, s_info in PARITELER.items():
+                isim = s_info["isim"]
                 if sembol in KASA["aktif_poz"]:
                     continue
                 try:
@@ -138,20 +158,24 @@ def piyasa_tarayici():
                     if current_dir == "BUY":
                         sl = round(fiyat * 0.998, 4)
                         tp = round(fiyat * 1.004, 4)
-                        KASA["aktif_poz"][sembol] = {"isim": isim, "yon": "BUY", "giris": fiyat, "sl": sl, "tp": tp}
+                        lot_boyutu = lot_hesapla(KASA["bakiye"], fiyat, sl, s_info)
+                        KASA["aktif_poz"][sembol] = {"isim": isim, "yon": "BUY", "giris": fiyat, "sl": sl, "tp": tp, "lot": lot_boyutu}
                         kasa_kaydet(KASA)
                         telegram_gonder(
                             f"🟢 *DEMO LONG AÇILDI* | `{isim}`\n"
+                            f"⚖️ Hesaplanan Lot: `{lot_boyutu}`\n"
                             f"Giriş: `{fiyat}` | SL: `{sl}` | TP: `{tp}`\n"
                             f"💰 Kasa: `${KASA['bakiye']:,.2f}`"
                         )
                     else:
                         sl = round(fiyat * 1.002, 4)
                         tp = round(fiyat * 0.996, 4)
-                        KASA["aktif_poz"][sembol] = {"isim": isim, "yon": "SELL", "giris": fiyat, "sl": sl, "tp": tp}
+                        lot_boyutu = lot_hesapla(KASA["bakiye"], fiyat, sl, s_info)
+                        KASA["aktif_poz"][sembol] = {"isim": isim, "yon": "SELL", "giris": fiyat, "sl": sl, "tp": tp, "lot": lot_boyutu}
                         kasa_kaydet(KASA)
                         telegram_gonder(
                             f"🔴 *DEMO SHORT AÇILDI* | `{isim}`\n"
+                            f"⚖️ Hesaplanan Lot: `{lot_boyutu}`\n"
                             f"Giriş: `{fiyat}` | SL: `{sl}` | TP: `{tp}`\n"
                             f"💰 Kasa: `${KASA['bakiye']:,.2f}`"
                         )
@@ -160,10 +184,10 @@ def piyasa_tarayici():
         except Exception:
             pass
 
-        time.sleep(300) # 5 dk döngü
+        time.sleep(300)
 
 if __name__ == '__main__':
-    SON_SAATLIK_ZAMAN = time.time() # Bot ilk açıldığı an sayacı başlat
+    SON_SAATLİK_ZAMAN = time.time()
     threading.Thread(target=piyasa_tarayici, daemon=True).start()
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
