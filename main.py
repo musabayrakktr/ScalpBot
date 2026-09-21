@@ -2,7 +2,7 @@ from datetime import datetime, timezone, timedelta
 import os
 import threading
 import time
-from flask import Flask
+from flask import Flask, request
 import numpy as np
 import pandas as pd
 import requests
@@ -27,6 +27,52 @@ def health_check():
       },
       200,
   )
+
+
+@app.route("/webhook", methods=["POST"])
+def tradingview_webhook():
+  global virtual_balance, open_positions
+  data = request.get_json(silent=True)
+  if not data:
+    return {"status": "error", "message": "JSON yok"}, 400
+
+  action_raw = str(data.get("action", "")).upper()
+  symbol = str(data.get("symbol", "GBPUSD")).upper()
+  lot = float(data.get("lot", 1.0))
+  price = float(data.get("price", 1.33700))
+  sl = float(data.get("sl", price - 0.001))
+  tp = float(data.get("tp", price + 0.003))
+
+  action_str = (
+      "LONG (BUY)"
+      if ("BUY" in action_raw or "LONG" in action_raw)
+      else "SHORT (SELL)"
+  )
+
+  open_positions.append({
+      "symbol": symbol,
+      "action": action_str,
+      "price": price,
+      "sl": sl,
+      "tp": tp,
+      "lot": lot,
+      "time": datetime.now().strftime("%H:%M"),
+  })
+
+  emoji_map = {"EURUSD": "💶", "XAUUSD": "🥇", "USDJPY": "💱", "GBPUSD": "💷"}
+  em = emoji_map.get(symbol, "⚡")
+  reply = (
+      f"🚨 *WEBHOOK DEMO İŞLEM* {em}\n"
+      f"──────────────────────────\n"
+      f"🎯 *Parite:* `{symbol}`\n"
+      f"⚡ *Yön:* *{action_str}*\n"
+      f"📦 *Lot:* `{lot} Lot`\n"
+      f"🏷️ *Giriş:* `{price}` | 🛑 *SL:* `{sl}` | 🎯 *TP:* `{tp}`\n"
+      f"──────────────────────────\n"
+      f"💡 *Sanal kasaya webhook ile eklendi.*"
+  )
+  broadcast_telegram(reply)
+  return {"status": "success", "added": symbol}, 200
 
 
 TELEGRAM_TOKEN = os.getenv(
@@ -132,7 +178,6 @@ def telegram_poller():
       resp = requests.get(
           url, params={"offset": offset, "timeout": 20}, timeout=25
       )
-      # DÜZELTİLDİ: status_status -> status_code
       if resp.status_code == 200:
         data = resp.json()
         for update in data.get("result", []):
@@ -153,7 +198,8 @@ def telegram_poller():
                 "🎯 *Komuta Merkezi Aktif!*\n\n"
                 "📋 *Mevcut Komutlar:*\n"
                 "• /durum — _Sanal kasa & piyasa nabzı_\n"
-                "• /fiyat — _Canlı parite akışı (EURUSD, XAUUSD, USDJPY, GBPUSD)_\n"
+                "• /fiyat — _Canlı parite akışı (EURUSD, XAUUSD, USDJPY,"
+                " GBPUSD)_\n"
                 "• /reset — _Kasayı $3,000'a sıfırla_\n"
                 "──────────────────────────"
             )
