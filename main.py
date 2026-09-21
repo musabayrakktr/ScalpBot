@@ -240,10 +240,8 @@ def evaluate_scalp_strategy(symbol):
   last_atr = float(atr.iloc[-1]) if not pd.isna(atr.iloc[-1]) else (last_close * 0.001)
 
   action = None
-  # Long: EMA(9) > EMA(21) kesişim + RSI > 45 ve 70'den küçük
   if prev_ema9 <= prev_ema21 and last_ema9 > last_ema21 and 45 < last_rsi < 70:
     action = "LONG (BUY)"
-  # Short: EMA(9) < EMA(21) kesişim + RSI < 55 ve 30'den büyük
   elif prev_ema9 >= prev_ema21 and last_ema9 < last_ema21 and 30 < last_rsi < 55:
     action = "SHORT (SELL)"
 
@@ -284,7 +282,6 @@ def bot_loop():
           sig = evaluate_scalp_strategy(symbol)
           if sig:
             last_signal_time[symbol] = now_ts
-            # Sanal kasanın %1.5 risk simülasyonu
             risk_amount = virtual_balance * 0.015
             open_positions.append({
                 "symbol": symbol,
