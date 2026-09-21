@@ -3,6 +3,8 @@ import time
 import threading
 import requests
 import numpy as np
+import pandas as pd
+import yfinance as yf
 from flask import Flask
 
 app = Flask(__name__)
@@ -13,6 +15,11 @@ def health_check():
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", os.getenv("TELEGRAM_TOKEN", ""))
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
+SYMBOLS = {
+    "EURUSD": "EURUSD=X",
+    "XAUUSD": "GC=F"
+}
 
 def send_telegram(text: str):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
@@ -30,12 +37,24 @@ def send_telegram(text: str):
     except Exception as e:
         print(f"Telegram hatası: {e}")
 
+def fetch_live_price(symbol_key):
+    ticker = SYMBOLS.get(symbol_key, "EURUSD=X")
+    data = yf.Ticker(ticker).history(period="1d", interval="1h")
+    if data is not None and not data.empty:
+        return round(float(data['Close'].iloc[-1]), 5)
+    return None
+
 def bot_loop():
-    print("ScalpBot arka plan döngüsü devrede...")
+    print("ScalpBot canli veri döngüsü devrede...")
     while True:
         try:
-            price = round(1.0850 + np.random.uniform(-0.0020, 0.0020), 5)
-            print(f"Piyasa yoklama geçildi, anlık ref fiyat: {price}")
+            eur_price = fetch_live_price("EURUSD")
+            gold_price = fetch_live_price("XAUUSD")
+            print(f"Canlı Fiyatlar -> EURUSD: {eur_price} | XAUUSD: {gold_price}")
+            
+            # Örnek sinyal/kontrol mantığı buraya bağlanır
+            # if condition: send_telegram(...)
+            
         except Exception as e:
             print(f"Loop err: {e}")
         time.sleep(300)
