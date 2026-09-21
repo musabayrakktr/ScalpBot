@@ -163,7 +163,7 @@ def telegram_poller():
               pos_lines = []
               for p in open_positions:
                 pos_lines.append(
-                    f"▪️ `{p['symbol']}` | *{p['action']}* | G: `{p['price']}`"
+                    f"▪️ `{p['symbol']}` | *{p['action']}* | {p.get('lot', 1.0)} Lot | G: `{p['price']}`"
                 )
               pos_str = "\n".join(pos_lines)
             else:
@@ -254,6 +254,14 @@ def evaluate_scalp_strategy(symbol):
       sl = round(last_close + sl_dist, 5)
       tp = round(last_close - tp_dist, 5)
 
+    # Agresif Demo Lot Hesabı ($3,000 kasa için %5 risk + yüksek hacim ölçeği)
+    sl_diff = abs(last_close - sl)
+    pip_mult = 100.0 if "JPY" in symbol else (10.0 if symbol == "XAUUSD" else 10000.0)
+    pip_val = sl_diff * pip_mult
+    risk_target = virtual_balance * 0.05  # %5 agresif risk
+    raw_lot = (risk_target / pip_val) * 2.5 if pip_val > 0 else 1.0
+    lot_size = round(max(0.5, min(raw_lot, 5.0)), 2)
+
     return {
         "symbol": symbol,
         "action": action,
@@ -262,6 +270,7 @@ def evaluate_scalp_strategy(symbol):
         "tp": tp,
         "rsi": round(last_rsi, 1),
         "atr": round(last_atr, 5),
+        "lot": lot_size,
     }
   return None
 
@@ -281,13 +290,14 @@ def bot_loop():
           sig = evaluate_scalp_strategy(symbol)
           if sig:
             last_signal_time[symbol] = now_ts
-            risk_amount = virtual_balance * 0.015
+            risk_amount = virtual_balance * 0.05
             open_positions.append({
                 "symbol": symbol,
                 "action": sig["action"],
                 "price": sig["price"],
                 "sl": sig["sl"],
                 "tp": sig["tp"],
+                "lot": sig["lot"],
                 "risk_usd": round(risk_amount, 2),
                 "time": datetime.now().strftime("%H:%M"),
             })
@@ -299,11 +309,12 @@ def bot_loop():
                 f"──────────────────────────\n"
                 f"🎯 *Parite:* `{sig['symbol']}`\n"
                 f"⚡ *Yön:* *{sig['action']}*\n"
+                f"📦 *Lot Boyutu:* `{sig['lot']} Lot`\n"
                 f"🏷️ *Giriş Fiyatı:* `{sig['price']}`\n"
                 f"🛑 *Stop-Loss (1.5xATR):* `{sig['sl']}`\n"
                 f"🎯 *Take-Profit (3.0xATR):* `{sig['tp']}`\n"
                 f"📊 *RSI(14):* `{sig['rsi']}` | *ATR:* `{sig['atr']}`\n"
-                f"💰 *Simüle Risk:* `${risk_amount:,.2f}` (1:2 R:R)\n"
+                f"💰 *Simüle Risk:* `${risk_amount:,.2f}` (Agresif Demo)\n"
                 f"──────────────────────────\n"
                 f"💡 *Sanal kasaya işlendi.*"
             )
