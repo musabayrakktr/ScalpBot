@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone, timedelta
 import os
 import threading
 import time
@@ -132,7 +132,8 @@ def telegram_poller():
       resp = requests.get(
           url, params={"offset": offset, "timeout": 20}, timeout=25
       )
-      if resp.status_status == 200 or resp.status_code == 200:
+      # DÜZELTİLDİ: status_status -> status_code
+      if resp.status_code == 200:
         data = resp.json()
         for update in data.get("result", []):
           offset = update["update_id"] + 1
