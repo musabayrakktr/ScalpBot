@@ -3,3 +3,5 @@ pandas==2.2.0
 numpy==1.26.4
 MetaTrader5==5.0.45
 ta==0.11.0
+flask==3.0.0
+gunicorn==21.2.0
