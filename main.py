@@ -3,22 +3,24 @@ import time
 import requests
 import json
 import threading
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from flask import Flask, jsonify
 import yfinance as yf
 import pandas as pd
 import ta
 
+# --- FLASK (Render Health-Check) ---
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return jsonify({"status": "active", "bot": "ForexScalpBot-Debug"}), 200
+    return jsonify({"status": "active", "bot": "MT5PracticeScalpBot"}), 200
 
 @app.route('/health', methods=['GET'])
 def health():
     return "OK", 200
 
+# --- AYARLAR & SANAL KASA ---
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 CHAT_ID = os.environ.get("CHAT_ID", "")
 SANAL_KASA_FILE = "sanal_kasa.json"
@@ -29,7 +31,7 @@ def kasa_yukle():
             with open(SANAL_KASA_FILE, "r") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"Kasa yükleme hatası: {e}")
+            print(f"Kasa yükleme hatası: {e}", flush=True)
     return {"bakiye": 3000.0, "aktif_poz": {}}
 
 def kasa_kaydet(data):
@@ -37,7 +39,7 @@ def kasa_kaydet(data):
         with open(SANAL_KASA_FILE, "w") as f:
             json.dump(data, f, indent=4)
     except Exception as e:
-        print(f"Kasa kayıt hatası: {e}")
+        print(f"Kasa kayıt hatası: {e}", flush=True)
 
 KASA = kasa_yukle()
 
@@ -51,11 +53,10 @@ PARITELER = {
 TIMEFRAME = "15m"  
 RISK_MIKTARI = 150.0  
 LAST_UPDATE_ID = 0
-SON_SAATLIK_BILDIRIM = 0
 
 def telegram_gonder(mesaj):
     if not TELEGRAM_TOKEN or not CHAT_ID:
-        print("Telegram token veya chat id eksik!")
+        print("⚠️ Telegram Token veya Chat ID eksik!", flush=True)
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
@@ -65,10 +66,9 @@ def telegram_gonder(mesaj):
         "disable_web_page_preview": True
     }
     try:
-        res = requests.post(url, json=payload, timeout=5)
-        print(f"Telegram yanıt code: {res.status_code}")
+        requests.post(url, json=payload, timeout=5)
     except Exception as e:
-        print(f"Telegram mesaj hatası: {e}")
+        print(f"Telegram mesaj hatası: {e}", flush=True)
 
 def komutlari_ayarla():
     if not TELEGRAM_TOKEN:
@@ -76,35 +76,22 @@ def komutlari_ayarla():
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/setMyCommands"
     commands = [
         {"command": "durum", "description": "💰 Sanal Kasa & Pozisyonlar"},
-        {"command": "fiyat", "description": "📊 Anlık Forex/Altın Fiyat & RSI (15M)"},
-        {"command": "piyasa", "description": "⏰ Piyasa Açık/Kapalı Durumu"},
-        {"command": "reset", "description": "🔄 Sanal Kasayı Sıfırla ($3000)"},
-        {"command": "yardim", "description": "ℹ️ Komut Listesi"}
+        {"command": "fiyat", "description": "📊 Anlık Fiyatlar & RSI"},
+        {"command": "reset", "description": "🔄 Kasayı $3000'a Sıfırla"}
     ]
     try:
         requests.post(url, json={"commands": commands}, timeout=5)
-    except Exception as e:
-        print(f"Komut ayar hatası: {e}")
+    except Exception:
+        pass
 
-def piyasa_durumu_bilgisi():
+def piyasa_kapali_mi():
     now_utc = datetime.now(timezone.utc)
     wd = now_utc.weekday()
     hour = now_utc.hour
-
-    kapali = False
-    durum_str = "🟢 **AÇIK (İşlem Yapılabilir)**"
-    detay = "Piyasalar aktif, 15M scalping taraması çalışıyor."
-
+    # Cuma 21:00 UTC - Pazar 21:00 UTC arası kapalı
     if wd == 5 or (wd == 4 and hour >= 21) or (wd == 6 and hour < 21):
-        kapali = True
-        durum_str = "🔴 **KAPALI (Hafta Sonu Tatili)**"
-        detay = "Forex/Altın piyasaları hafta sonu kapalıdır. Pazar 21:00 UTC'de açılır."
-
-    return durum_str, detay, kapali
-
-def haffacilik_kapali_mi():
-    _, _, kapali = piyasa_durumu_bilgisi()
-    return kapali
+        return True
+    return False
 
 def telegram_dinleyici():
     global LAST_UPDATE_ID, KASA
@@ -124,80 +111,135 @@ def telegram_dinleyici():
                         if CHAT_ID and cid != str(CHAT_ID):
                             continue
                         txt = msg["text"].strip().lower()
-                        if txt in ["/start", "/yardim", "yardım"]:
-                            telegram_gonder("🤖 *Bot Aktif*")
-                        elif txt == "/durum":
-                            telegram_gonder(f"Bakiye: ${KASA['bakiye']:,.2f}")
-        except Exception as e:
-            print(f"Listener hata: {e}")
+                        if txt == "/durum":
+                            bakiye = KASA["bakiye"]
+                            pozs = KASA["aktif_poz"]
+                            ozet = f"💰 *Demo Kasa:* `${bakiye:,.2f}`\n\n"
+                            if not pozs:
+                                ozet += "📌 *Aktif poz yok.*"
+                            else:
+                                for sym, p in pozs.items():
+                                    ozet += f"• *{p['isim']}* ({p['yon']}) | Giriş: `{p['giris']}` | SL: `{p['sl']}` | TP: `{p['tp']}`\n"
+                            telegram_gonder(ozet)
+                        elif txt == "/reset":
+                            KASA = {"bakiye": 3000.0, "aktif_poz": {}}
+                            kasa_kaydet(KASA)
+                            telegram_gonder("🔄 Kasa *$3,000.00* olarak sıfırlandı!")
+        except Exception:
             time.sleep(2)
         time.sleep(1)
 
 def piyasa_tarayici_worker():
-    global KASA, SON_SAATLIK_BILDIRIM
-    telegram_gonder("🚀 *Debug Mod Başlatıldı!* Loglar devrede.")
-    print("Worker başladı...")
+    global KASA
+    print("🚀 Piyasa tarayıcı worker aktifleşti...", flush=True)
+    telegram_gonder("🎯 *MT5 Pratik Botu Başlatıldı!* Her 5 dakikada bir tarama devrede.")
 
     while True:
         try:
-            suan_epoch = time.time()
-            if suan_epoch - SON_SAATLIK_BILDIRIM > 3600:
-                aktif_sayi = len(KASA["aktif_poz"])
-                durum, _, _ = piyasa_durumu_bilgisi()
-                telegram_gonder(
-                    f"🟢 *SCALPBOT 15M SAATLİK RAPOR* ⏰\n"
-                    f"⚡ *Piyasa:* {durum}\n"
-                    f"📌 *Aktif Poz:* `{aktif_sayi} adet`\n"
-                    f"💰 *Kasa:* `${KASA['bakiye']:,.2f}`"
-                )
-                SON_SAATLIK_BILDIRIM = suan_epoch
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Piyasalar taranıyor...", flush=True)
+            
+            # 1. Açık pozisyonları TP/SL tetik kontrolü yap
+            aktifler = list(KASA["aktif_poz"].items())
+            for sembol, pos in aktifler:
+                try:
+                    df = yf.Ticker(sembol).history(period="1d", interval=TIMEFRAME)
+                    if df.empty: continue
+                    anlik = round(float(df['Close'].iloc[-1]), 4)
+                    yon, sl, tp, isim = pos['yon'], pos['sl'], pos['tp'], pos['isim']
 
-            is_closed = haffacilik_kapali_mi()
-            print(f"Piyasa kapalı mı?: {is_closed}")
+                    kapatildi, sonuc_msg = False, ""
+                    if yon == 'BUY':
+                        if anlik >= tp:
+                            kazanc = RISK_MIKTARI * 2
+                            KASA["bakiye"] += kazanc
+                            sonuc_msg = f"✅ *TP OLDU (LONG)* | {isim}\nKapatma: `{anlik}` | Kâr: `+${kazanc}`"
+                            kapatildi = True
+                        elif anlik <= sl:
+                            KASA["bakiye"] -= RISK_MIKTARI
+                            sonuc_msg = f"❌ *SL PATLADI (LONG)* | {isim}\nKapatma: `{anlik}` | Zarar: `-${RISK_MIKTARI}`"
+                            kapatildi = True
+                    elif yon == 'SELL':
+                        if anlik <= tp:
+                            kazanc = RISK_MIKTARI * 2
+                            KASA["bakiye"] += kazanc
+                            sonuc_msg = f"✅ *TP OLDU (SHORT)* | {isim}\nKapatma: `{anlik}` | Kâr: `+${kazanc}`"
+                            kapatildi = True
+                        elif anlik >= sl:
+                            KASA["bakiye"] -= RISK_MIKTARI
+                            sonuc_msg = f"❌ *SL PATLADI (SHORT)* | {isim}\nKapatma: `{anlik}` | Zarar: `-${RISK_MIKTARI}`"
+                            kapatildi = True
 
-            if not is_closed:
+                    if kapatildi:
+                        del KASA["aktif_poz"][sembol]
+                        kasa_kaydet(KASA)
+                        telegram_gonder(f"{sonuc_msg}\n💰 Yeni Bakiye: `${KASA['bakiye']:,.2f}`")
+                except Exception as e:
+                    print(f"Poz kontrol hatası {sembol}: {e}", flush=True)
+
+            # 2. Yeni Sinyal Taraması (Piyasa açıkken)
+            if not piyasa_kapali_mi():
                 for sembol, isim in PARITELER.items():
-                    print(f"Taranıyor: {isim} ({sembol})...")
+                    if sembol in KASA["aktif_poz"]:
+                        continue
                     try:
-                        df = yf.Ticker(sembol).history(period="2d", interval=TIMEFRAME)
-                        print(f"DF uzunluk ({sembol}): {len(df)}")
-                        if len(df) < 25: 
-                            print(f"Yetersiz veri: {len(df)}")
-                            continue
-                        
+                        df = yf.Ticker(sembol).history(period="3d", interval=TIMEFRAME)
+                        if len(df) < 25: continue
+
                         df['EMA9'] = ta.trend.ema_indicator(df['Close'], window=9)
                         df['EMA21'] = ta.trend.ema_indicator(df['Close'], window=21)
                         df['RSI'] = ta.momentum.rsi(df['Close'], window=14)
 
-                        son = df.iloc[-1]
-                        onceki = df.iloc[-2]
+                        son, onceki = df.iloc[-1], df.iloc[-2]
                         fiyat = round(float(son['Close']), 4)
                         rsi = round(float(son['RSI']), 2)
 
                         long_kosul = onceki['EMA9'] <= onceki['EMA21'] and son['EMA9'] > son['EMA21'] and rsi > 46
                         short_kosul = onceki['EMA9'] >= onceki['EMA21'] and son['EMA9'] < son['EMA21'] and rsi < 54
 
-                        print(f"{isim} Fiyat: {fiyat}, RSI: {rsi}, LongK: {long_kosul}, ShortK: {short_kosul}")
+                        if long_kosul:
+                            sl = round(fiyat * 0.998, 4)
+                            tp = round(fiyat * 1.004, 4)
+                            KASA["aktif_poz"][sembol] = {"isim": isim, "yon": "BUY", "giris": fiyat, "sl": sl, "tp": tp}
+                            kasa_kaydet(KASA)
+                            msg = (
+                                f"⚡ *MT5 PRATİK SİNYALİ - LONG (BUY)*\n"
+                                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                                f"📊 Parite: `{isim}`\n"
+                                f"🟢 MT5 Giriş: `{fiyat}`\n"
+                                f"🛑 MT5 Stop-Loss: `{sl}`\n"
+                                f"🎯 MT5 Take-Profit: `{tp}`\n"
+                                f"📈 RSI: `{rsi}`"
+                            )
+                            telegram_gonder(msg)
+                            print(f"Sinyal atıldı (LONG): {isim} @ {fiyat}", flush=True)
 
-                        if sembol not in KASA["aktif_poz"]:
-                            if long_kosul:
-                                sl = round(fiyat * 0.998, 4)
-                                tp = round(fiyat * 1.004, 4)
-                                KASA["aktif_poz"][sembol] = {"isim": isim, "yon": "BUY", "giris": fiyat, "sl": sl, "tp": tp}
-                                kasa_kaydet(KASA)
-                                telegram_gonder(f"⚡ *SCALP SİNYALİ (LONG)* | {isim} | Giriş: {fiyat}")
-                            elif short_kosul:
-                                sl = round(fiyat * 1.002, 4)
-                                tp = round(fiyat * 0.996, 4)
-                                KASA["aktif_poz"][sembol] = {"isim": isim, "yon": "SELL", "giris": fiyat, "sl": sl, "tp": tp}
-                                kasa_kaydet(KASA)
-                                telegram_gonder(f"⚡ *SCALP SİNYALİ (SHORT)* | {isim} | Giriş: {fiyat}")
+                        elif short_kosul:
+                            sl = round(fiyat * 1.002, 4)
+                            tp = round(fiyat * 0.996, 4)
+                            KASA["aktif_poz"][sembol] = {"isim": isim, "yon": "SELL", "giris": fiyat, "sl": sl, "tp": tp}
+                            kasa_kaydet(KASA)
+                            msg = (
+                                f"⚡ *MT5 PRATİK SİNYALİ - SHORT (SELL)*\n"
+                                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                                f"📊 Parite: `{isim}`\n"
+                                f"🔴 MT5 Giriş: `{fiyat}`\n"
+                                f"🛑 MT5 Stop-Loss: `{sl}`\n"
+                                f"🎯 MT5 Take-Profit: `{tp}`\n"
+                                f"📉 RSI: `{rsi}`"
+                            )
+                            telegram_gonder(msg)
+                            print(f"Sinyal atıldı (SHORT): {isim} @ {fiyat}", flush=True)
+
                     except Exception as e:
-                        print(f"Parite iç hata ({sembol}): {e}")
-        except Exception as e:
-            print(f"Tarayıcı genel hata: {e}")
+                        print(f"Parite analiz hatası {sembol}: {e}", flush=True)
+            else:
+                print("Piyasa şu an kapalı (hafta sonu tatili UTC).", flush=True)
 
-        time.sleep(60) # Debug için 60 saniyede bir dene hızlıca görelim
+        except Exception as e:
+            print(f"Genel tarayıcı hatası: {e}", flush=True)
+
+        # 5 dakikada bir (300 saniye) tarama
+        time.sleep(300)
 
 if __name__ == "__main__":
     komutlari_ayarla()
