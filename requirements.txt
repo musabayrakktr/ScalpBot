@@ -1,5 +1,1 @@
-yfinance
-pandas
-ta
-requests
-flask
+
