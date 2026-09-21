@@ -1,20 +1,33 @@
 import os
 import time
+import threading
 import requests
 import pandas as pd
 import numpy as np
 import MetaTrader5 as mt5
+from flask import Flask
 from ta.trend import EMAIndicator
 from ta.momentum import RSIIndicator
 
+# --- FLASK (Healthcheck / Port Bind) ---
+app = Flask(__name__)
+
+@app.route("/")
+def health_check():
+    return "ScalpBot is alive!", 200
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
 # --- AYARLAR VE ENV ---
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "YOUR_BOT_TOKEN")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", os.getenv("TELEGRAM_TOKEN", "YOUR_BOT_TOKEN"))
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "YOUR_CHAT_ID")
 
 SYMBOL = "EURUSD"
-TIMEFRAME = mt5.TIMEFRAME_H1  # 1 Saatlik
+TIMEFRAME = mt5.TIMEFRAME_H1
 LOT_SIZE = 0.1
-RISK_REWARD_RATIO = 2.0  # TP = 2 * SL (ATR bazlı)
+RISK_REWARD_RATIO = 2.0
 
 # --- TELEGRAM BİLDİRİM ---
 def send_telegram(text: str):
@@ -30,15 +43,11 @@ def send_telegram(text: str):
     except Exception as e:
         print(f"Telegram hatası: {e}")
 
-# --- MT5 BAĞLANTI & VERİ ÇEKME ---
+# --- MT5 & STRATEJİ FONKSİYONLARI ---
 def init_mt5():
     if not mt5.initialize():
         print(f"MT5 başlatılamadı, hata kodu: {mt5.last_error()}")
         return False
-    # Demo hesapta olduğundan emin olmak için hesap bilgisi basabilirsin
-    account_info = mt5.account_info()
-    if account_info:
-        print(f"Bağlandı! Hesap: {account_info.login} | Sunucu: {account_info.server} | Demo/Live: {not account_info.trade_allowed}")
     return True
 
 def get_data(symbol, timeframe, bars=300):
@@ -49,7 +58,6 @@ def get_data(symbol, timeframe, bars=300):
     df['time'] = pd.to_datetime(df['time'], unit='s')
     return df
 
-# --- ATR HESABI ---
 def calculate_atr(df, period=14):
     high_low = df['high'] - df['low']
     high_close = np.abs(df['high'] - df['close'].shift())
@@ -58,13 +66,11 @@ def calculate_atr(df, period=14):
     true_range = np.max(ranges, axis=1)
     return true_range.rolling(period).mean()
 
-# --- STRATEJİ & ANALİZ ---
 def analyze_market():
     df = get_data(SYMBOL, TIMEFRAME, 300)
     if df is None:
         return None
 
-    # İndikatörler
     ema50 = EMAIndicator(close=df['close'], window=50).ema_indicator()
     ema200 = EMAIndicator(close=df['close'], window=200).ema_indicator()
     rsi = RSIIndicator(close=df['close'], window=14).rsi()
@@ -78,7 +84,6 @@ def analyze_market():
     last = df.iloc[-1]
     prev = df.iloc[-2]
 
-    # Koşul: EMA50 yukarı yönlü EMA200'ü kesiyor + RSI aşırı alım/satım bölgesinde değil
     action = None
     if prev['ema50'] <= prev['ema200'] and last['ema50'] > last['ema200'] and 40 < last['rsi'] < 65:
         action = "BUY"
@@ -91,12 +96,8 @@ def analyze_market():
         sl_dist = current_atr * 1.5
         tp_dist = sl_dist * RISK_REWARD_RATIO
 
-        if action == "BUY":
-            sl = round(current_price - sl_dist, 5)
-            tp = round(current_price + tp_dist, 5)
-        else:
-            sl = round(current_price + sl_dist, 5)
-            tp = round(current_price - tp_dist, 5)
+        sl = round(current_price - sl_dist, 5) if action == "BUY" else round(current_price + sl_dist, 5)
+        tp = round(current_price + tp_dist, 5) if action == "BUY" else round(current_price - tp_dist, 5)
 
         return {
             "action": action,
@@ -107,7 +108,6 @@ def analyze_market():
         }
     return None
 
-# --- MT5 İŞLEM İCRASI (DEMO) ---
 def execute_trade(signal):
     symbol_info = mt5.symbol_info(SYMBOL)
     if not symbol_info:
@@ -137,38 +137,37 @@ def execute_trade(signal):
 
     result = mt5.order_send(request)
     if result.retcode != mt5.TRADE_RETCODE_DONE:
-        return {"status": "ERROR", "msg": f"Retcode: {result.retcode}, desc: {result.comment}"}
-    
+        return {"status": "ERROR", "msg": f"Retcode: {result.retcode}"}
     return {"status": "SUCCESS", "ticket": result.order, "price": result.price}
 
-# --- ANA DÖNGÜ / ÇALIŞMA ---
-def main():
-    print("ScalpBot Demo Başlatılıyor...")
-    if not init_mt5():
-        return
-
-    # Sinyal kontrol
-    signal = analyze_market()
-    if signal:
-        print(f"Sinyal Yakalandı: {signal}")
-        trade_res = execute_trade(signal)
-        print(f"İşlem Sonucu: {trade_res}")
-
-        # Telegram Rapor
-        msg = (
-            f"🧪 *ScalpBot Demo Rapor*\n"
-            f"Parite: `{SYMBOL}`\n"
-            f"Yön: `{signal['action']}`\n"
-            f"Giriş Fiyatı: `{signal['price']}`\n"
-            f"SL: `{signal['sl']}` | TP: `{signal['tp']}`\n"
-            f"İşlem Durumu: `{trade_res['status']}`\n"
-            f"Detay/Ticket: `{trade_res.get('ticket', trade_res.get('msg'))}`"
-        )
-        send_telegram(msg)
-    else:
-        print("Şu an strateji koşuluna uyan yeni sinyal yok, takipteyiz.")
-
-    mt5.shutdown()
+# --- BOT ARKA PLAN DÖNGÜSÜ ---
+def bot_loop():
+    print("ScalpBot Arka Plan Döngüsü Başlatıldı...")
+    while True:
+        try:
+            if init_mt5():
+                signal = analyze_market()
+                if signal:
+                    trade_res = execute_trade(signal)
+                    msg = (
+                        f"🧪 *ScalpBot Demo Rapor*\n"
+                        f"Parite: `{SYMBOL}`\n"
+                        f"Yön: `{signal['action']}`\n"
+                        f"Giriş: `{signal['price']}` | SL/TP: `{signal['sl']}`/`{signal['tp']}`\n"
+                        f"Durum: `{trade_res['status']}`"
+                    )
+                    send_telegram(msg)
+                mt5.shutdown()
+        except Exception as e:
+            print(f"Bot döngü hatası: {e}")
+        
+        # 1 saatte bir kontrol (3600 sn)
+        time.sleep(3600)
 
 if __name__ == "__main__":
-    main()
+    # Arka plan bot thread'i başlat
+    t = threading.Thread(target=bot_loop, daemon=True)
+    t.start()
+    
+    # Ana thread Flask portunu dinlesin (Render Healthcheck için şart)
+    run_flask()
