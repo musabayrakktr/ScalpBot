@@ -458,7 +458,7 @@ def bot_loop():
     time.sleep(60)
 
 
-if __name__ == __main__":
+if __name__ == "__main__":
   t_loop = threading.Thread(target=bot_loop, daemon=True)
   t_loop.start()
 
