@@ -134,12 +134,13 @@ def telegram_poller():
 
           if text == "/start":
             reply = (
-                "⚡ *SCALPRADAR TERMINAL v2.1*\n"
+                "⚡ *SCALPRADAR TERMINAL v2.1+*\n"
                 "──────────────────────────\n"
                 "🎯 *Komuta Merkezi Aktif!*\n\n"
                 "📋 *Mevcut Komutlar:*\n"
                 "• /durum — _Sanal kasa & piyasa nabzı_\n"
-                "• /fiyat — _Canlı parite akışı (EURUSD, XAUUSD, USDJPY, GBPUSD)_\n"
+                "• /fiyat — _Canlı parite akışı (EURUSD, XAUUSD, USDJPY,"
+                " GBPUSD)_\n"
                 "• /reset — _Kasayı $3,000'a sıfırla_\n"
                 "──────────────────────────"
             )
@@ -156,14 +157,18 @@ def telegram_poller():
             pnl_diff = virtual_balance - INITIAL_BALANCE
             pnl_emoji = "🟢" if pnl_diff >= 0 else "🔴"
             pnl_str = (
-                f"+${pnl_diff:,.2f}" if pnl_diff >= 0 else f"-${abs(pnl_diff):,.2f}"
+                f"+${pnl_diff:,.2f}"
+                if pnl_diff >= 0
+                else f"-${abs(pnl_diff):,.2f}"
             )
 
             if open_positions:
               pos_lines = []
               for p in open_positions:
+                lot_info = f" | {p.get('lot', 0.1)} Lot"
                 pos_lines.append(
-                    f"▪️ `{p['symbol']}` | *{p['action']}* | G: `{p['price']}`"
+                    f"▪️ `{p['symbol']}` | *{p['action']}*{lot_info} | G:"
+                    f" `{p['price']}`"
                 )
               pos_str = "\n".join(pos_lines)
             else:
@@ -172,7 +177,8 @@ def telegram_poller():
             reply = (
                 f"🛡️ *SANAL KASA & RİSK RAPORU*\n"
                 f"──────────────────────────\n"
-                f"💵 *Bakiye:* `${virtual_balance:,.2f}`  {pnl_emoji} `({pnl_str})`\n"
+                f"💵 *Bakiye:* `${virtual_balance:,.2f}`  {pnl_emoji}"
+                f" `({pnl_str})`\n"
                 f"📡 *Piyasa:* {status_line}\n\n"
                 f"📂 *Açık Pozisyonlar:*\n{pos_str}\n"
                 f"──────────────────────────"
@@ -236,7 +242,9 @@ def evaluate_scalp_strategy(symbol):
   last_ema21 = float(ema21.iloc[-1])
   prev_ema21 = float(ema21.iloc[-2])
   last_rsi = float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else 50.0
-  last_atr = float(atr.iloc[-1]) if not pd.isna(atr.iloc[-1]) else (last_close * 0.001)
+  last_atr = (
+      float(atr.iloc[-1]) if not pd.isna(atr.iloc[-1]) else (last_close * 0.001)
+  )
 
   action = None
   if prev_ema9 <= prev_ema21 and last_ema9 > last_ema21 and 45 < last_rsi < 70:
@@ -254,6 +262,16 @@ def evaluate_scalp_strategy(symbol):
       sl = round(last_close + sl_dist, 5)
       tp = round(last_close - tp_dist, 5)
 
+    # Risk bazlı lot hesaplama (%1.5 risk)
+    risk_usd = virtual_balance * 0.015
+    sl_diff = abs(last_close - sl)
+    pip_mult = (
+        100.0 if "JPY" in symbol else (10.0 if symbol == "XAUUSD" else 10000.0)
+    )
+    pip_val = sl_diff * pip_mult
+    raw_lot = (risk_usd / pip_val) if pip_val > 0 else 0.1
+    lot_size = round(max(0.01, min(raw_lot, 5.0)), 2)
+
     return {
         "symbol": symbol,
         "action": action,
@@ -262,6 +280,8 @@ def evaluate_scalp_strategy(symbol):
         "tp": tp,
         "rsi": round(last_rsi, 1),
         "atr": round(last_atr, 5),
+        "lot": lot_size,
+        "risk_usd": round(risk_usd, 2),
     }
   return None
 
@@ -281,29 +301,35 @@ def bot_loop():
           sig = evaluate_scalp_strategy(symbol)
           if sig:
             last_signal_time[symbol] = now_ts
-            risk_amount = virtual_balance * 0.015
             open_positions.append({
                 "symbol": symbol,
                 "action": sig["action"],
                 "price": sig["price"],
                 "sl": sig["sl"],
                 "tp": sig["tp"],
-                "risk_usd": round(risk_amount, 2),
+                "lot": sig["lot"],
+                "risk_usd": sig["risk_usd"],
                 "time": datetime.now().strftime("%H:%M"),
             })
 
-            emoji_map = {"EURUSD": "💶", "XAUUSD": "🥇", "USDJPY": "💱", "GBPUSD": "💷"}
+            emoji_map = {
+                "EURUSD": "💶",
+                "XAUUSD": "🥇",
+                "USDJPY": "💱",
+                "GBPUSD": "💷",
+            }
             em = emoji_map.get(symbol, "⚡")
             reply = (
                 f"🚨 *15M VIP SCALP SİNYALİ* {em}\n"
                 f"──────────────────────────\n"
                 f"🎯 *Parite:* `{sig['symbol']}`\n"
                 f"⚡ *Yön:* *{sig['action']}*\n"
+                f"📦 *Önerilen Lot:* `{sig['lot']} Lot`\n"
                 f"🏷️ *Giriş Fiyatı:* `{sig['price']}`\n"
                 f"🛑 *Stop-Loss (1.5xATR):* `{sig['sl']}`\n"
                 f"🎯 *Take-Profit (3.0xATR):* `{sig['tp']}`\n"
                 f"📊 *RSI(14):* `{sig['rsi']}` | *ATR:* `{sig['atr']}`\n"
-                f"💰 *Simüle Risk:* `${risk_amount:,.2f}` (1:2 R:R)\n"
+                f"💰 *Simüle Risk:* `${sig['risk_usd']:,.2f}` (1:2 R:R)\n"
                 f"──────────────────────────\n"
                 f"💡 *Sanal kasaya işlendi.*"
             )
