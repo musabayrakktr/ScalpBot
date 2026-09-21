@@ -4,19 +4,29 @@ import requests
 import pandas as pd
 import yfinance as yf
 from datetime import datetime
+from threading import Thread
+from flask import Flask
+
+# --- WEB SERVER (Render Port Check İçin) ---
+app = Flask(__name__)
+
+@app.route("/")
+def health_check():
+    return "ScalpBot 15M Aktif ve Ayakta!", 200
+
+def run_flask():
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
 
 # --- AYARLAR ---
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "SENIN_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "SENIN_CHAT_ID")
 
-# 4 Parite (Scalp İçin 15M Dönüyoruz)
-SYMBOLS = ["EURUSD=X", "GBPUSD=X", "USDJPY=X", "GC=F"]  # XAUUSD için GC=F veya broker kodun
-INTERVAL = "15m"  # 1H yerine 15M scalping hızı
-CHECK_INTERVAL_SECONDS = 900  # Her 15 dakikada bir kontrol (900 saniye)
+SYMBOLS = ["EURUSD=X", "GBPUSD=X", "USDJPY=X", "GC=F"]
+INTERVAL = "15m"
+CHECK_INTERVAL_SECONDS = 900  # 15 dakika
 
-# Demo Bakiye Takip
 demo_balance = 3000.0
-active_positions = 0
 
 def send_telegram_message(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -36,39 +46,30 @@ def calculate_rsi(series, period=14):
     return 100 - (100 / (1 + rs))
 
 def check_market():
-    global active_positions
-    msg_list = []
-    
     for symbol in SYMBOLS:
         try:
-            # 15m veri çek
             df = yf.download(symbol, period="2d", interval=INTERVAL, progress=False)
             if df.empty or len(df.Close) < 25:
                 continue
                 
             close_prices = df['Close'].squeeze()
             
-            # EMA 9 ve EMA 21
             ema9 = close_prices.ewm(span=9, adjust=False).mean()
             ema21 = close_prices.ewm(span=21, adjust=False).mean()
             rsi14 = calculate_rsi(close_prices, period=14)
             
             curr_close = float(close_prices.iloc[-1])
-            prev_close = float(close_prices.iloc[-2])
             curr_ema9 = float(ema9.iloc[-1])
             prev_ema9 = float(ema9.iloc[-2])
             curr_ema21 = float(ema21.iloc[-1])
-            prev_ema21 = float(ema21.iloc[-1]) # ya da önceki
+            prev_ema21 = float(ema21.iloc[-2])
             curr_rsi = float(rsi14.iloc[-1])
             
             clean_name = symbol.replace("=X", "").replace("GC=F", "XAUUSD")
             
-            # Scalp Kesişim Şartı: EMA9 yukarı kesiyor EMA21 + RSI momentum (> 48)
             buy_condition = (prev_ema9 <= prev_ema21) and (curr_ema9 > curr_ema21) and (curr_rsi > 48)
-            # Scalp Satış Şartı: EMA9 aşağı kesiyor EMA21 + RSI momentum (< 52)
             sell_condition = (prev_ema9 >= prev_ema21) and (curr_ema9 < curr_ema21) and (curr_rsi < 52)
             
-            # Pip / Nokta bazlı basit SL/TP hesapla
             if buy_condition:
                 sl = round(curr_close * 0.998, 4)
                 tp = round(curr_close * 1.004, 4)
@@ -94,9 +95,17 @@ def check_market():
         except Exception as e:
             print(f"Hata ({symbol}): {e}")
 
-# Döngü
-if __name__ == "__main__":
-    send_telegram_message("🚀 *SCALPBOT 15M MODU AKTİF*\n⚡ Hızlı tarama devrede.")
+def bot_loop():
+    send_telegram_message("🚀 *SCALPBOT 15M MODU AKTİF*\n⚡ Port check + 15M tarama devrede.")
     while True:
         check_market()
         time.sleep(CHECK_INTERVAL_SECONDS)
+
+if __name__ == "__main__":
+    # Flask sunucusunu ayrı thread'de başlat (Render port uyarısı vermesin diye)
+    t = Thread(target=run_flask)
+    t.daemon = True
+    t.start()
+    
+    # Bot döngüsü
+    bot_loop()
