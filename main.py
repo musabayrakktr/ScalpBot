@@ -11,7 +11,7 @@ import yfinance as yf
 app = Flask(__name__)
 
 
-# --- HEALTHCHECK & KEEP-ALIVE (Render 404 / Spin-Down Çözümü) ---
+# --- HEALTHCHECK & KEEP-ALIVE ---
 @app.route("/", methods=["GET"])
 @app.route("/health", methods=["GET"])
 @app.route("/ping", methods=["GET"])
@@ -193,7 +193,7 @@ def telegram_poller():
 
           if text == "/start":
             reply = (
-                "⚡ *SCALPRADAR TERMINAL v2.1*\n"
+                "⚡ *SCALPRADAR TERMINAL v2.2*\n"
                 "──────────────────────────\n"
                 "🎯 *Komuta Merkezi Aktif!*\n\n"
                 "📋 *Mevcut Komutlar:*\n"
@@ -344,10 +344,70 @@ def evaluate_scalp_strategy(symbol):
 
 def bot_loop():
   global virtual_balance, open_positions
-  print("ScalpBot 15m strateji döngüsü devrede...")
+  print("ScalpBot 15m strateji & SL/TP döngüsü devrede...")
   while True:
     try:
       status_str, _ = get_market_status()
+
+      # 1. Açık pozisyonları canlı fiyatla kontrol et (TP/SL taraması)
+      if open_positions:
+        remaining_positions = []
+        for p in open_positions:
+          curr_price = fetch_live_price(p["symbol"])
+          closed = False
+          reason = ""
+          pnl_change = 0.0
+
+          if curr_price is not None:
+            pip_mult = (
+                100.0
+                if "JPY" in p["symbol"]
+                else (10.0 if p["symbol"] == "XAUUSD" else 10000.0)
+            )
+            lot = p.get("lot", 1.0)
+            if "LONG" in p["action"]:
+              if curr_price <= p["sl"]:
+                closed, reason = True, "🛑 STOP-LOSS (SL)"
+                pnl_change = -(abs(curr_price - p["price"]) * pip_mult * lot)
+              elif curr_price >= p["tp"]:
+                closed, reason = True, "🎯 TAKE-PROFIT (TP)"
+                pnl_change = abs(curr_price - p["price"]) * pip_mult * lot
+            else:  # SHORT
+              if curr_price >= p["sl"]:
+                closed, reason = True, "🛑 STOP-LOSS (SL)"
+                pnl_change = -(abs(curr_price - p["price"]) * pip_mult * lot)
+              elif curr_price <= p["tp"]:
+                closed, reason = True, "🎯 TAKE-PROFIT (TP)"
+                pnl_change = abs(curr_price - p["price"]) * pip_mult * lot
+
+          if closed:
+            virtual_balance += pnl_change
+            emoji_map = {
+                "EURUSD": "💶",
+                "XAUUSD": "🥇",
+                "USDJPY": "💱",
+                "GBPUSD": "💷",
+            }
+            em = emoji_map.get(p["symbol"], "⚡")
+            pnl_str = (
+                f"+${pnl_change:,.2f}"
+                if pnl_change >= 0
+                else f"-${abs(pnl_change):,.2f}"
+            )
+            broadcast_telegram(
+                f"{reason} {em}\n"
+                f"──────────────────────────\n"
+                f"🎯 *Parite:* `{p['symbol']}` | *Yön:* {p['action']}\n"
+                f"🏷️ *Kapanış Fiyatı:* `{curr_price}`\n"
+                f"💰 *PnL:* `({pnl_str})`\n"
+                f"💵 *Yeni Bakiye:* `${virtual_balance:,.2f}`\n"
+                f"──────────────────────────"
+            )
+          else:
+            remaining_positions.append(p)
+        open_positions = remaining_positions
+
+      # 2. Yeni sinyal taraması (Piyasa aktifse)
       if status_str == "🟢 AKTİF":
         for symbol in SYMBOLS.keys():
           now_ts = time.time()
@@ -386,12 +446,11 @@ def bot_loop():
                 f"🛑 *Stop-Loss (1.5xATR):* `{sig['sl']}`\n"
                 f"🎯 *Take-Profit (3.0xATR):* `{sig['tp']}`\n"
                 f"📊 *RSI(14):* `{sig['rsi']}` | *ATR:* `{sig['atr']}`\n"
-                f"💰 *Simüle Risk:* `${risk_amount:,.2f}` (Agresif Demo)\n"
+                f"💰 *Simüle Risk:* `${risk_amount:,.2f}`\n"
                 f"──────────────────────────\n"
                 f"💡 *Sanal kasaya işlendi.*"
             )
             broadcast_telegram(reply)
-            print(f"VIP Sinyal üretildi ve işlendi: {sig}")
       else:
         print("Piyasa kapalı, tarama es geçiliyor...")
     except Exception as e:
@@ -399,7 +458,7 @@ def bot_loop():
     time.sleep(60)
 
 
-if __name__ == "__main__":
+if __name__ == __main__":
   t_loop = threading.Thread(target=bot_loop, daemon=True)
   t_loop.start()
 
