@@ -31,6 +31,7 @@ SYMBOLS = {
 virtual_balance = 3000.0
 INITIAL_BALANCE = 3000.0
 open_positions = []
+last_signal_time = {}
 
 
 def send_telegram(chat_id, text):
@@ -49,6 +50,11 @@ def send_telegram(chat_id, text):
     print(f"Telegram send err: {e}")
 
 
+def broadcast_telegram(text):
+  if TELEGRAM_CHAT_ID:
+    send_telegram(TELEGRAM_CHAT_ID, text)
+
+
 def fetch_live_price(symbol_key):
   ticker_info = SYMBOLS.get(symbol_key)
   if not ticker_info:
@@ -61,6 +67,29 @@ def fetch_live_price(symbol_key):
   except Exception as e:
     print(f"yfinance err for {symbol_key}: {e}")
   return None
+
+
+def fetch_15m_df(symbol_key):
+  ticker_info = SYMBOLS.get(symbol_key)
+  if not ticker_info:
+    return None
+  ticker = ticker_info[0]
+  try:
+    data = yf.Ticker(ticker).history(period="5d", interval="15m")
+    if data is not None and len(data) > 30:
+      return data
+  except Exception as e:
+    print(f"yfinance 15m err for {symbol_key}: {e}")
+  return None
+
+
+def calculate_atr(df, period=14):
+  high_low = df["High"] - df["Low"]
+  high_close = np.abs(df["High"] - df["Close"].shift())
+  low_close = np.abs(df["Low"] - df["Close"].shift())
+  ranges = pd.concat([high_low, high_close, low_close], axis=1)
+  true_range = np.max(ranges, axis=1)
+  return true_range.rolling(period).mean()
 
 
 def get_market_status():
@@ -76,7 +105,7 @@ def get_market_status():
 
 
 def telegram_poller():
-  global virtual_balance, open_positions
+  global virtual_balance, open_positions, TELEGRAM_CHAT_ID
   if not TELEGRAM_TOKEN:
     print("TELEGRAM_TOKEN bulunamadı, poller başlatılmıyor.")
     return
@@ -98,6 +127,9 @@ def telegram_poller():
           if not msg:
             continue
           chat_id = msg.get("chat", {}).get("id")
+          if not TELEGRAM_CHAT_ID:
+            TELEGRAM_CHAT_ID = str(chat_id)
+
           text = msg.get("text", "").strip()
 
           if text == "/start":
@@ -166,6 +198,7 @@ def telegram_poller():
             send_telegram(chat_id, reply)
 
           elif text == "/reset":
+            global virtual_balance, open_positions
             virtual_balance = INITIAL_BALANCE
             open_positions.clear()
             reply = (
@@ -182,17 +215,109 @@ def telegram_poller():
     time.sleep(2)
 
 
+def evaluate_scalp_strategy(symbol):
+  df = fetch_15m_df(symbol)
+  if df is None or len(df) < 30:
+    return None
+
+  close = df["Close"]
+  ema9 = close.ewm(span=9).mean()
+  ema21 = close.ewm(span=21).mean()
+  atr = calculate_atr(df, 14)
+
+  delta = close.diff()
+  gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+  loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+  rs = gain / loss
+  rsi = 100 - (100 / (1 + rs))
+
+  last_close = float(close.iloc[-1])
+  last_ema9 = float(ema9.iloc[-1])
+  prev_ema9 = float(ema9.iloc[-2])
+  last_ema21 = float(ema21.iloc[-1])
+  prev_ema21 = float(ema21.iloc[-2])
+  last_rsi = float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else 50.0
+  last_atr = float(atr.iloc[-1]) if not pd.isna(atr.iloc[-1]) else (last_close * 0.001)
+
+  action = None
+  # Long: EMA(9) > EMA(21) kesişim + RSI > 45 ve 70'den küçük
+  if prev_ema9 <= prev_ema21 and last_ema9 > last_ema21 and 45 < last_rsi < 70:
+    action = "LONG (BUY)"
+  # Short: EMA(9) < EMA(21) kesişim + RSI < 55 ve 30'den büyük
+  elif prev_ema9 >= prev_ema21 and last_ema9 < last_ema21 and 30 < last_rsi < 55:
+    action = "SHORT (SELL)"
+
+  if action:
+    sl_dist = last_atr * 1.5
+    tp_dist = last_atr * 3.0
+    if "LONG" in action:
+      sl = round(last_close - sl_dist, 5)
+      tp = round(last_close + tp_dist, 5)
+    else:
+      sl = round(last_close + sl_dist, 5)
+      tp = round(last_close - tp_dist, 5)
+
+    return {
+        "symbol": symbol,
+        "action": action,
+        "price": round(last_close, 5),
+        "sl": sl,
+        "tp": tp,
+        "rsi": round(last_rsi, 1),
+        "atr": round(last_atr, 5),
+    }
+  return None
+
+
 def bot_loop():
-  print("ScalpBot veri döngüsü devrede...")
+  global virtual_balance, open_positions
+  print("ScalpBot 15m strateji döngüsü devrede...")
   while True:
     try:
-      p_str = " | ".join(
-          [f"{s}: {fetch_live_price(s)}" for s in SYMBOLS.keys()]
-      )
-      print(f"Canlı Fiyatlar -> {p_str}")
+      status_str, _ = get_market_status()
+      if status_str == "🟢 AKTİF":
+        for symbol in SYMBOLS.keys():
+          now_ts = time.time()
+          if now_ts - last_signal_time.get(symbol, 0) < 900:
+            continue
+
+          sig = evaluate_scalp_strategy(symbol)
+          if sig:
+            last_signal_time[symbol] = now_ts
+            # Sanal kasanın %1.5 risk simülasyonu
+            risk_amount = virtual_balance * 0.015
+            open_positions.append({
+                "symbol": symbol,
+                "action": sig["action"],
+                "price": sig["price"],
+                "sl": sig["sl"],
+                "tp": sig["tp"],
+                "risk_usd": round(risk_amount, 2),
+                "time": datetime.now().strftime("%H:%M"),
+            })
+
+            emoji_map = {"EURUSD": "💶", "XAUUSD": "🥇", "USDJPY": "💱", "GBPUSD": "💷"}
+            em = emoji_map.get(symbol, "⚡")
+            reply = (
+                f"🚨 *15M VIP SCALP SİNYALİ* {em}\n"
+                f"──────────────────────────\n"
+                f"🎯 *Parite:* `{sig['symbol']}`\n"
+                f"⚡ *Yön:* *{sig['action']}*\n"
+                f"🏷️ *Giriş Fiyatı:* `{sig['price']}`\n"
+                f"🛑 *Stop-Loss (1.5xATR):* `{sig['sl']}`\n"
+                f"🎯 *Take-Profit (3.0xATR):* `{sig['tp']}`\n"
+                f"📊 *RSI(14):* `{sig['rsi']}` | *ATR:* `{sig['atr']}`\n"
+                f"💰 *Simüle Risk:* `${risk_amount:,.2f}` (1:2 R:R)\n"
+                f"──────────────────────────\n"
+                f"💡 *Sanal kasaya işlendi.*"
+            )
+            broadcast_telegram(reply)
+            print(f"VIP Sinyal üretildi ve işlendi: {sig}")
+      else:
+        print("Piyasa kapalı, tarama es geçiliyor...")
     except Exception as e:
       print(f"Loop err: {e}")
-    time.sleep(300)
+    time.sleep(60)
 
 
 if __name__ == "__main__":
