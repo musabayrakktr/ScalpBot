@@ -134,7 +134,7 @@ def telegram_poller():
 
           if text == "/start":
             reply = (
-                "⚡ *SCALPRADAR TERMINAL v2.1+*\n"
+                "⚡ *SCALPRADAR TERMINAL v2.1*\n"
                 "──────────────────────────\n"
                 "🎯 *Komuta Merkezi Aktif!*\n\n"
                 "📋 *Mevcut Komutlar:*\n"
@@ -256,11 +256,11 @@ def evaluate_scalp_strategy(symbol):
     sl_dist = last_atr * 1.5
     tp_dist = last_atr * 3.0
     if "LONG" in action:
-      sl = round(last_close - sl_dist, 5)
-      tp = round(last_close + tp_dist, 5)
+      sl = last_close - sl_dist
+      tp = last_close + tp_dist
     else:
-      sl = round(last_close + sl_dist, 5)
-      tp = round(last_close - tp_dist, 5)
+      sl = last_close + sl_dist
+      tp = last_close - tp_dist
 
     # Risk bazlı lot hesaplama (%1.5 risk)
     risk_usd = virtual_balance * 0.015
@@ -272,14 +272,17 @@ def evaluate_scalp_strategy(symbol):
     raw_lot = (risk_usd / pip_val) if pip_val > 0 else 0.1
     lot_size = round(max(0.01, min(raw_lot, 5.0)), 2)
 
+    # Pariteye göre hassasiyet (XAUUSD=2, JPY=3, diğerleri=5)
+    dig = 2 if symbol == "XAUUSD" else (3 if "JPY" in symbol else 5)
+
     return {
         "symbol": symbol,
         "action": action,
-        "price": round(last_close, 5),
-        "sl": sl,
-        "tp": tp,
+        "price": round(last_close, dig),
+        "sl": round(sl, dig),
+        "tp": round(tp, dig),
         "rsi": round(last_rsi, 1),
-        "atr": round(last_atr, 5),
+        "atr": round(last_atr, dig),
         "lot": lot_size,
         "risk_usd": round(risk_usd, 2),
     }
@@ -351,4 +354,3 @@ if __name__ == "__main__":
 
   port = int(os.environ.get("PORT", 10000))
   app.run(host="0.0.0.0", port=port)
-  
