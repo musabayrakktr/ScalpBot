@@ -30,7 +30,7 @@ def kasa_yukle():
 def kasa_kaydet(data):
     try:
         with open(SANAL_KASA_FILE, "w") as f:
-            json.dump(data, f, indent+4 if False else 4)
+            json.dump(data, f, indent=4)
     except Exception:
         pass
 
@@ -70,9 +70,7 @@ def lot_hesapla(bakiye, giris, sl, sembol_info):
             return 0.01
         
         kontrat = sembol_info["kontrat"]
-        # Zarar edilen miktar = Lot * kontrat * fiyat_farkı
         lot = risk_dolar / (fark * kontrat)
-        # Broker standartlarına göre yuvarla (en az 0.01 lot)
         lot = max(0.01, round(lot, 2))
         return lot
     except Exception:
@@ -111,38 +109,38 @@ def piyasa_tarayici():
                     yon, sl, tp, isim, lot = pos['yon'], pos['sl'], pos['tp'], pos['isim'], pos.get('lot', 0.1)
 
                     kapatildi, sonuc_msg = False, ""
-                    risk_tutar = KASA["bakiye"] * RISK_YUZDESI # Yaklaşık baz
+                    risk_tutar = KASA["bakiye"] * RISK_YUZDESI
                     if yon == 'BUY':
                         if anlik >= tp:
                             kazanc = risk_tutar * 2.0
                             KASA["bakiye"] += kazanc
-                            sonuc_msg = f"✅ *TP OLDU (LONG)* | {isim} ({lot} lot)\nKapatma: `{anlik}` | Kâr: `+${kazanc:,.2f}`"
+                            sonuc_msg = f"🎯 *TP HEDEFİ VURULDU! (LONG)*\n━━━━━━━━━━━━━━━━━━━━━━\n📊 Parite: `{isim}` | Lot: `{lot}`\nKapatma Fiyatı: `{anlik}`\n✨ Kâr: `+${kazanc:,.2f}`"
                             kapatildi = True
                         elif anlik <= sl:
                             Zarar = risk_tutar
                             KASA["bakiye"] -= Zarar
-                            sonuc_msg = f"❌ *SL PATLADI (LONG)* | {isim} ({lot} lot)\nKapatma: `{anlik}` | Zarar: `-${Zarar:,.2f}`"
+                            sonuc_msg = f"💥 *SL PATLADI! (LONG)*\n━━━━━━━━━━━━━━━━━━━━━━\n📊 Parite: `{isim}` | Lot: `{lot}`\nKapatma Fiyatı: `{anlik}`\n⚠️ Zarar: `-${Zarar:,.2f}`"
                             kapatildi = True
                     elif yon == 'SELL':
                         if anlik <= tp:
                             kazanc = risk_tutar * 2.0
                             KASA["bakiye"] += kazanc
-                            sonuc_msg = f"✅ *TP OLDU (SHORT)* | {isim} ({lot} lot)\nKapatma: `{anlik}` | Kâr: `+${kazanc:,.2f}`"
+                            sonuc_msg = f"🎯 *TP HEDEFİ VURULDU! (SHORT)*\n━━━━━━━━━━━━━━━━━━━━━━\n📊 Parite: `{isim}` | Lot: `{lot}`\nKapatma Fiyatı: `{anlik}`\n✨ Kâr: `+${kazanc:,.2f}`"
                             kapatildi = True
                         elif anlik >= sl:
                             Zarar = risk_tutar
                             KASA["bakiye"] -= Zarar
-                            sonuc_msg = f"❌ *SL PATLADI (SHORT)* | {isim} ({lot} lot)\nKapatma: `{anlik}` | Zarar: `-${Zarar:,.2f}`"
+                            sonuc_msg = f"💥 *SL PATLADI! (SHORT)*\n━━━━━━━━━━━━━━━━━━━━━━\n📊 Parite: `{isim}` | Lot: `{lot}`\nKapatma Fiyatı: `{anlik}`\n⚠️ Zarar: `-${Zarar:,.2f}`"
                             kapatildi = True
 
                     if kapatildi:
                         del KASA["aktif_poz"][sembol]
                         kasa_kaydet(KASA)
-                        telegram_gonder(f"{sonuc_msg}\n💰 *Güncel Kasa:* `${KASA['bakiye']:,.2f}`")
+                        telegram_gonder(f"{sonuc_msg}\n💰 *Yeni Kasa:* `${KASA['bakiye']:,.2f}`")
                 except Exception:
                     pass
 
-            # 3. Yeni Sinyal Taraması + Dinamik Lot Hesaplama
+            # 3. Yeni Sinyal Taraması + Canlı Format
             for sembol, s_info in PARITELER.items():
                 isim = s_info["isim"]
                 if sembol in KASA["aktif_poz"]:
@@ -162,10 +160,14 @@ def piyasa_tarayici():
                         KASA["aktif_poz"][sembol] = {"isim": isim, "yon": "BUY", "giris": fiyat, "sl": sl, "tp": tp, "lot": lot_boyutu}
                         kasa_kaydet(KASA)
                         telegram_gonder(
-                            f"🟢 *DEMO LONG AÇILDI* | `{isim}`\n"
-                            f"⚖️ Hesaplanan Lot: `{lot_boyutu}`\n"
-                            f"Giriş: `{fiyat}` | SL: `{sl}` | TP: `{tp}`\n"
-                            f"💰 Kasa: `${KASA['bakiye']:,.2f}`"
+                            f"🚀 *YENİ DEMO LONG AÇILDI* 🟢\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"📊 Parite: `{isim}`\n"
+                            f"⚖️ Lot Boyutu: `🔮 {lot_boyutu}`\n"
+                            f"🟢 Giriş Fiyatı: `{fiyat}`\n"
+                            f"🛑 Stop-Loss: `{sl}`\n"
+                            f"🎯 Take-Profit: `{tp}`\n"
+                            f"💰 Anlık Kasa: `${KASA['bakiye']:,.2f}`"
                         )
                     else:
                         sl = round(fiyat * 1.002, 4)
@@ -174,10 +176,14 @@ def piyasa_tarayici():
                         KASA["aktif_poz"][sembol] = {"isim": isim, "yon": "SELL", "giris": fiyat, "sl": sl, "tp": tp, "lot": lot_boyutu}
                         kasa_kaydet(KASA)
                         telegram_gonder(
-                            f"🔴 *DEMO SHORT AÇILDI* | `{isim}`\n"
-                            f"⚖️ Hesaplanan Lot: `{lot_boyutu}`\n"
-                            f"Giriş: `{fiyat}` | SL: `{sl}` | TP: `{tp}`\n"
-                            f"💰 Kasa: `${KASA['bakiye']:,.2f}`"
+                            f"🔥 *YENİ DEMO SHORT AÇILDI* 🔴\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"📊 Parite: `{isim}`\n"
+                            f"⚖️ Lot Boyutu: `🔮 {lot_boyutu}`\n"
+                            f"🔴 Giriş Fiyatı: `{fiyat}`\n"
+                            f"🛑 Stop-Loss: `{sl}`\n"
+                            f"🎯 Take-Profit: `{tp}`\n"
+                            f"💰 Anlık Kasa: `${KASA['bakiye']:,.2f}`"
                         )
                 except Exception:
                     pass
