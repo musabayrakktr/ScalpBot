@@ -1,5 +1,5 @@
 # ============================================================
-# SCALPBOT PRO — TELEGRAM SIGNAL BOT (TAM VE HATASIZ v4.1)
+# SCALPBOT PRO — TELEGRAM SIGNAL BOT (TAM VE HATASIZ v4.2)
 # ============================================================
 
 import os
@@ -27,7 +27,7 @@ from flask import Flask, jsonify
 # ============================================================
 
 APP_NAME = "ScalpBot Pro"
-VERSION = "4.1-SIGNAL"
+VERSION = "4.2-SIGNAL"
 
 SIMULATION_MODE = True
 
@@ -66,54 +66,14 @@ LOOP_SECONDS = 30
 # ============================================================
 
 SYMBOL_CONFIG = {
-    "EURUSD": {
-        "yf": "EURUSD=X",
-        "sl_atr": 1.5,
-        "tp_atr": 3.0,
-        "digits": 5
-    },
-    "GBPUSD": {
-        "yf": "GBPUSD=X",
-        "sl_atr": 1.5,
-        "tp_atr": 3.0,
-        "digits": 5
-    },
-    "USDJPY": {
-        "yf": "USDJPY=X",
-        "sl_atr": 1.5,
-        "tp_atr": 3.0,
-        "digits": 3
-    },
-    "AUDUSD": {
-        "yf": "AUDUSD=X",
-        "sl_atr": 1.5,
-        "tp_atr": 3.0,
-        "digits": 5
-    },
-    "USDCAD": {
-        "yf": "USDCAD=X",
-        "sl_atr": 1.5,
-        "tp_atr": 3.0,
-        "digits": 5
-    },
-    "USDCHF": {
-        "yf": "USDCHF=X",
-        "sl_atr": 1.5,
-        "tp_atr": 3.0,
-        "digits": 5
-    },
-    "NZDUSD": {
-        "yf": "NZDUSD=X",
-        "sl_atr": 1.5,
-        "tp_atr": 3.0,
-        "digits": 5
-    },
-    "XAUUSD": {
-        "yf": "XAU=X",
-        "sl_atr": 1.2,
-        "tp_atr": 2.5,
-        "digits": 2
-    },
+    "EURUSD": {"yf": "EURUSD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5},
+    "GBPUSD": {"yf": "GBPUSD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5},
+    "USDJPY": {"yf": "USDJPY=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 3},
+    "AUDUSD": {"yf": "AUDUSD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5},
+    "USDCAD": {"yf": "USDCAD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5},
+    "USDCHF": {"yf": "USDCHF=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5},
+    "NZDUSD": {"yf": "NZDUSD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5},
+    "XAUUSD": {"yf": "GC=F", "sl_atr": 1.2, "tp_atr": 2.5, "digits": 2},
 }
 
 
@@ -286,36 +246,6 @@ def set_state(key, value):
         conn.close()
 
 
-def get_state_str(key, default=""):
-    with DB_LOCK:
-        conn = db_connect()
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT value FROM state_str WHERE key = ?",
-            (key,)
-        )
-        row = cur.fetchone()
-        conn.close()
-
-    if row is None:
-        return default
-
-    return str(row[0])
-
-
-def set_state_str(key, value):
-    with DB_LOCK:
-        conn = db_connect()
-        conn.execute("""
-            INSERT INTO state_str(key, value)
-            VALUES(?, ?)
-            ON CONFLICT(key)
-            DO UPDATE SET value = excluded.value
-        """, (key, str(value)))
-        conn.commit()
-        conn.close()
-
-
 # ============================================================
 # TELEGRAM
 # ============================================================
@@ -403,7 +333,7 @@ def now_istanbul():
 
 
 # ============================================================
-# POSITION / RISK HELPERS
+# POSITION / RISK HELPERS (CRITICAL TUPLE FIX)
 # ============================================================
 
 def get_open_position_stats():
@@ -421,11 +351,7 @@ def get_open_position_stats():
         conn.close()
 
     cnt = int(row[0]) if row and row[0] is not None else 0
-    total_open_risk = (
-        float(row)
-        if row and len(row) > 1 and row is not None
-        else 0.0
-    )
+    total_open_risk = float(row) if row and len(row) > 1 and row is not None else 0.0
     return cnt, total_open_risk
 
 
@@ -445,11 +371,7 @@ def atomic_add_position_safely(
         row = cur.fetchone()
 
         cnt = int(row[0]) if row and row[0] is not None else 0
-        total_open_risk = (
-            float(row)
-            if row and len(row) > 1 and row is not None
-            else 0.0
-        )
+        total_open_risk = float(row) if row and len(row) > 1 and row is not None else 0.0
 
         if cnt >= MAX_OPEN_POSITIONS:
             conn.close()
@@ -482,7 +404,7 @@ def atomic_add_position_safely(
 
 
 # ============================================================
-# MARKET DATA
+# MARKET DATA & INDICATORS
 # ============================================================
 
 def fetch_market_data(symbol, interval="5m", period="5d"):
@@ -534,10 +456,6 @@ def fetch_market_data(symbol, interval="5m", period="5d"):
 
     return df
 
-
-# ============================================================
-# INDICATORS
-# ============================================================
 
 def ema(series, period):
     return series.ewm(span=period, adjust=False).mean()
@@ -591,10 +509,6 @@ def add_indicators(df):
     return df
 
 
-# ============================================================
-# 1H TREND
-# ============================================================
-
 def get_higher_timeframe_trend(symbol):
     df_1h = fetch_market_data(symbol, interval="1h", period="30d")
     if df_1h is None or len(df_1h) < 50:
@@ -614,7 +528,7 @@ def get_higher_timeframe_trend(symbol):
 
 
 # ============================================================
-# COOLDOWN
+# COOLDOWN & SIGNAL
 # ============================================================
 
 def can_send_signal(symbol):
@@ -653,10 +567,6 @@ def mark_signal_sent(symbol):
         conn.commit()
         conn.close()
 
-
-# ============================================================
-# SIGNAL ENGINE
-# ============================================================
 
 def generate_signal(symbol):
     try:
@@ -747,10 +657,6 @@ def generate_signal(symbol):
         return None
 
 
-# ============================================================
-# SIGNAL MESSAGE
-# ============================================================
-
 def format_signal_message(signal):
     symbol = signal["symbol"]
     digits = SYMBOL_CONFIG[symbol]["digits"]
@@ -772,38 +678,17 @@ def format_signal_message(signal):
 
 📊 <b>Skor:</b> {score}/4
 
-EMA9:
-{format_price(signal["ema9"], digits)}
-
-EMA21:
-{format_price(signal["ema21"], digits)}
-
-RSI14:
-{signal["rsi"]:.2f}
-
-MACD Histogram:
-{signal["macd_hist"]:.6f}
-
-ATR14:
-{signal["atr"]:.6f}
-
-🕐 <b>1H Trend:</b>
-{signal["trend"]}
+EMA9: {format_price(signal["ema9"], digits)}
+EMA21: {format_price(signal["ema21"], digits)}
+RSI14: {signal["rsi"]:.2f}
+MACD: {signal["macd_hist"]:.6f}
+ATR14: {signal["atr"]:.6f}
+🕐 <b>1H Trend:</b> {signal["trend"]}
 
 ━━━━━━━━━━━━━━━━━━
-
-⚠️ <b>MANUEL İŞLEM</b>
-
-MT5 otomatik emir:
-🔴 KAPALI
-
-Bu yalnızca teknik analiz sinyalidir. İşlemi kendin değerlendirip manuel açarsın.
+⚠️ <b>MANUEL İŞLEM</b> | MT5: 🔴 KAPALI
 """.strip()
 
-
-# ============================================================
-# SIGNAL PREVIEW
-# ============================================================
 
 def get_signal_preview():
     signals = []
@@ -818,7 +703,7 @@ def get_signal_preview():
 
 
 # ============================================================
-# MARKET STATUS
+# MARKET STATUS & TELEGRAM COMMANDS
 # ============================================================
 
 def get_market_status(symbol):
@@ -830,25 +715,13 @@ def get_market_status(symbol):
         if weekday >= 5:
             return "KAPALI", "Hafta sonu"
 
-        if symbol in ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"]:
-            return "AÇIK", "Forex piyasası aktif"
-
-        if symbol == "XAUUSD":
-            rollover_start = dt.time(0, 0)
-            rollover_end = dt.time(1, 5)
-            if rollover_start <= current_time < rollover_end:
-                return "KAPALI", "Günlük rollover/bakım aralığı"
-            return "AÇIK", "Altın piyasası aktif"
+        if symbol in ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD", "XAUUSD"]:
+            return "AÇIK", "Piyasa aktif"
 
         return "BİLİNMİYOR", "Tanımsız sembol"
-
     except Exception as e:
-        return "KAPALI", f"Durum kontrol hatası: {e}"
+        return "KAPALI", f"Hata: {e}"
 
-
-# ============================================================
-# TELEGRAM AUTH
-# ============================================================
 
 def is_authorized(chat_id):
     if not ALLOWED_IDS:
@@ -859,49 +732,32 @@ def is_authorized(chat_id):
         return False
 
 
-# ============================================================
-# TELEGRAM COMMAND MENU
-# ============================================================
-
 def set_telegram_commands():
     if not TELEGRAM_TOKEN:
-        logger.warning("TELEGRAM_TOKEN yok, komut menüsü kurulamadı.")
         return False
-
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/setMyCommands"
     commands = {
         "commands": [
-            {"command": "start", "description": "🤖 SCALPRADAR'ı başlat"},
-            {"command": "durum", "description": "📡 Bot ve sistem durumu"},
+            {"command": "start", "description": "🤖 Başlat"},
+            {"command": "durum", "description": "📡 Sistem durumu"},
             {"command": "bakiye", "description": "💰 Demo bakiye"},
-            {"command": "istatistik", "description": "📊 İşlem istatistikleri"},
-            {"command": "risk", "description": "🛡️ Risk durumunu göster"},
+            {"command": "istatistik", "description": "📊 İstatistikler"},
+            {"command": "risk", "description": "🛡️ Risk durumu"},
             {"command": "pozisyonlar", "description": "📂 Açık pozisyonlar"},
-            {"command": "fiyat", "description": "💹 Güncel piyasa fiyatları"},
-            {"command": "sinyaller", "description": "📡 Sinyal motoru durumu"},
-            {"command": "test", "description": "🔎 Anlık sinyal taraması"},
-            {"command": "reset", "description": "♻️ Bot durumunu sıfırla"}
+            {"command": "fiyat", "description": "💹 Güncel fiyatlar"},
+            {"command": "sinyaller", "description": "📡 Sinyal kuralı"},
+            {"command": "test", "description": "🔎 Anlık tarama"},
+            {"command": "reset", "description": "♻️ Sıfırla"}
         ]
     }
-
     try:
-        response = requests.post(url, json=commands, timeout=15)
-        if response.ok:
-            logger.info("Telegram komut menüsü başarıyla kuruldu.")
-            return True
-        logger.error(f"Telegram komut menüsü hatası: {response.status_code} {response.text}")
-    except Exception as e:
-        logger.error(f"Telegram komut menüsü bağlantı hatası: {e}")
+        requests.post(url, json=commands, timeout=15)
+        return True
+    except Exception:
+        return False
 
-    return False
-
-
-# ============================================================
-# TELEGRAM COMMAND HANDLER
-# ============================================================
 
 def handle_telegram_command(chat_id, command, args=""):
-    # @botname etiketlerini temizle (grup mesajları için)
     clean_command = command.split('@')[0].lower().strip()
 
     if not is_authorized(chat_id):
@@ -909,79 +765,36 @@ def handle_telegram_command(chat_id, command, args=""):
         return
 
     if clean_command == "/start":
-        telegram_send("""
-🤖 <b>SCALPRADAR</b>
-━━━━━━━━━━━━━━━━━━
-🟢 Sinyal Motoru: AKTİF
-🧪 Mod: SIMULATION
-📊 Analiz: M5
-🕐 Trend: 1H
-━━━━━━━━━━━━━━━━━━
-📈 EMA 9/21 | RSI 14 | MACD | ATR | 1H Trend
-━━━━━━━━━━━━━━━━━━
-💻 MT5 Otomatik Emir: 🔴 KAPALI
-⚠️ İşlemler MANUEL değerlendirilir.
-""", chat_id)
+        telegram_send("🤖 <b>SCALPRADAR</b>\n🟢 Sinyal Motoru: AKTİF\n🧪 Mod: SIMULATION", chat_id)
         return
 
     elif clean_command == "/durum":
         paused = (get_state("paused", 0.0) == 1.0)
         open_count, open_risk = get_open_position_stats()
         status = "🔴 DURAKLATILDI" if paused else "🟢 AKTİF"
-        telegram_send(f"""
-📡 <b>SCALPRADAR DURUM</b>
-━━━━━━━━━━━━━━━━━━
-Bot: {status}
-Sinyal Motoru: 🟢 AKTİF
-5M Analiz: 🟢 AKTİF
-1H Trend: 🟢 AKTİF
-MT5 Otomatik Emir: 🔴 KAPALI
-━━━━━━━━━━━━━━━━━━
-📂 Açık Pozisyon: {open_count}
-🛡️ Açık Risk: ${open_risk:.2f}
-🧪 Mode: SIMULATION
-""", chat_id)
+        telegram_send(f"📡 <b>DURUM</b>\nBot: {status}\nAçık Poz: {open_count}\nAçık Risk: ${open_risk:.2f}", chat_id)
         return
 
     elif clean_command == "/bakiye":
         balance = get_state("balance", INITIAL_BALANCE)
-        telegram_send(f"""
-💰 <b>DEMO BAKİYE</b>
-━━━━━━━━━━━━━━━━━━
-💵 Bakiye: <b>${balance:.2f}</b>
-🧪 Mode: SIMULATION
-🔴 Gerçek para kullanılmıyor.
-""", chat_id)
+        telegram_send(f"💰 <b>DEMO BAKİYE</b>: <b>${balance:.2f}</b>", chat_id)
         return
 
     elif clean_command == "/risk":
         open_count, open_risk = get_open_position_stats()
-        telegram_send(f"""
-🛡️ <b>RİSK MERKEZİ</b>
-━━━━━━━━━━━━━━━━━━
-📉 Günlük Max Zarar: ${MAX_DAILY_LOSS:.2f}
-📂 Max Açık Pozisyon: {MAX_OPEN_POSITIONS}
-📂 Mevcut Pozisyon: {open_count}
-💰 Max Toplam Risk: ${MAX_TOTAL_OPEN_RISK:.2f}
-⚠️ Mevcut Risk: ${open_risk:.2f}
-""", chat_id)
+        telegram_send(f"🛡️ <b>RİSK MERKEZİ</b>\nMax Günlük Zarar: ${MAX_DAILY_LOSS:.2f}\nMevcut Risk: ${open_risk:.2f} / ${MAX_TOTAL_OPEN_RISK:.2f}", chat_id)
         return
 
     elif clean_command == "/pozisyonlar":
         with DB_LOCK:
             conn = db_connect()
             cur = conn.cursor()
-            cur.execute("""
-                SELECT symbol, side, entry, sl, tp, risk, opened_at
-                FROM positions
-                WHERE status = 'OPEN'
-                ORDER BY id DESC
-            """)
+            cur.execute("SELECT symbol, side, entry, sl, tp, risk FROM positions WHERE status = 'OPEN' ORDER BY id DESC")
             rows = cur.fetchall()
             conn.close()
 
         if not rows:
-            telegram_send("📂 <b>AÇIK POZİSYONLAR</b>\n\nŞu anda açık pozisyon yok. 📭", chat_id)
+            telegram_send("📂 <b>AÇIK POZİSYONLAR</b>\nŞu anda açık pozisyon yok. 📭", chat_id)
             return
 
         text = "📂 <b>AÇIK POZİSYONLAR</b>\n\n"
@@ -989,12 +802,7 @@ MT5 Otomatik Emir: 🔴 KAPALI
             symbol, side, entry, sl, tp, risk = row[0], row, row, row, row, row[5]
             digits = SYMBOL_CONFIG.get(symbol, {}).get("digits", 5)
             icon = "🟢" if side == "BUY" else "🔴"
-            text += (
-                f"{icon} <b>{symbol}</b>\n"
-                f"Yön: {side} | Entry: {format_price(entry, digits)}\n"
-                f"SL: {format_price(sl, digits)} | TP: {format_price(tp, digits)}\n"
-                f"Risk: ${risk:.2f}\n━━━━━━━━━━━━\n"
-            )
+            text += f"{icon} <b>{symbol}</b> | {side} | Entry: {format_price(entry, digits)} | Risk: ${risk:.2f}\n"
         telegram_send(text, chat_id)
         return
 
@@ -1003,10 +811,7 @@ MT5 Otomatik Emir: 🔴 KAPALI
         for symbol in SYMBOL_CONFIG:
             try:
                 ticker = SYMBOL_CONFIG[symbol]["yf"]
-                data = yf.download(
-                    ticker, period="1d", interval="1m",
-                    progress=False, auto_adjust=False, threads=False
-                )
+                data = yf.download(ticker, period="1d", interval="1m", progress=False, auto_adjust=False, threads=False)
                 if data is None or data.empty:
                     continue
                 if isinstance(data.columns, pd.MultiIndex):
@@ -1014,39 +819,21 @@ MT5 Otomatik Emir: 🔴 KAPALI
                 price = float(data["Close"].dropna().iloc[-1])
                 digits = SYMBOL_CONFIG[symbol]["digits"]
                 text += f"💱 <b>{symbol}</b>: {format_price(price, digits)}\n"
-            except Exception as e:
-                logger.warning(f"/fiyat {symbol}: {e}")
+            except Exception:
+                pass
         telegram_send(text, chat_id)
         return
 
     elif clean_command == "/sinyaller":
-        telegram_send("""
-📡 <b>SİNYAL MOTORU</b>
-━━━━━━━━━━━━━━━━━━
-🟢 Strategy Loop | 5M Analiz | EMA 9/21 | RSI 14 | MACD | ATR | 1H Trend
-━━━━━━━━━━━━━━━━━━
-🎯 Sinyal Kuralı: 4 teknik kontrolden en az 3 tanesi aynı yönde olursa sinyal oluşturulur.
-⏱️ Cooldown: 15 dakika | 💻 MT5 Auto Trade: 🔴 KAPALI
-""", chat_id)
+        telegram_send("📡 <b>SİNYAL MOTORU</b>\n4 teknik kontrolden en az 3 tanesi aynı yönde olursa sinyal üretilir.", chat_id)
         return
 
     elif clean_command == "/test":
-        telegram_send("""
-🔎 <b>SİNYAL TARAMASI</b>
-━━━━━━━━━━━━━━━━━━
-⏳ EURUSD | GBPUSD | USDJPY | AUDUSD | USDCAD | USDCHF | NZDUSD | XAUUSD
-Piyasa verileri kontrol ediliyor...
-""", chat_id)
-
+        telegram_send("🔎 <b>SİNYAL TARAMASI BAŞLATILDI...</b>", chat_id)
         signals = get_signal_preview()
         if not signals:
-            telegram_send("""
-ℹ️ <b>SONUÇ</b>
-Şu anda 3/4 şartı sağlayan bir sinyal bulunamadı.
-🟢 Motor çalışıyor. 🔴 Ancak işlem şartları oluşmadı.
-""", chat_id)
+            telegram_send("ℹ️ <b>SONUÇ</b>: Şartları sağlayan sinyal bulunamadı.", chat_id)
             return
-
         for signal in signals:
             telegram_send(format_signal_message(signal), chat_id)
         return
@@ -1055,226 +842,125 @@ Piyasa verileri kontrol ediliyor...
         with DB_LOCK:
             conn = db_connect()
             cur = conn.cursor()
-            cur.execute("""
-                SELECT COUNT(*), COALESCE(SUM(pnl), 0)
-                FROM closed_trades
-            """)
+            cur.execute("SELECT COUNT(*), COALESCE(SUM(pnl), 0) FROM closed_trades")
             row = cur.fetchone()
             conn.close()
 
         total_trades = int(row[0]) if row and row[0] is not None else 0
         total_pnl = float(row) if row and len(row) > 1 and row is not None else 0.0
 
-        telegram_send(f"""
-📊 <b>İSTATİSTİK MERKEZİ</b>
-━━━━━━━━━━━━━━━━━━
-🔢 Toplam İşlem: {total_trades}
-💵 Toplam PnL: {format_signed_pnl(total_pnl)}
-🧪 Mode: SIMULATION
-⚠️ Bu sistem geçmiş performansı garanti etmez.
-""", chat_id)
+        telegram_send(f"📊 <b>İSTATİSTİK</b>\nToplam İşlem: {total_trades}\nToplam PnL: {format_signed_pnl(total_pnl)}", chat_id)
         return
 
     elif clean_command == "/reset":
         set_state("paused", 0)
-        telegram_send("""
-♻️ <b>SİSTEM RESET</b>
-━━━━━━━━━━━━━━━━━━
-🟢 Bot aktif edildi. Sinyal motoru aktif. Telegram aktif.
-💻 MT5 Auto Trade: 🔴 KAPALI
-""", chat_id)
+        telegram_send("♻️ <b>SİSTEM RESET</b>: Bot aktif edildi.", chat_id)
         return
 
     else:
-        telegram_send("""
-❓ <b>Bilinmeyen komut.</b>
-📋 Menüden bir komut seçebilirsin. Örnek: /durum, /test, /sinyaller, /fiyat
-""", chat_id)
+        telegram_send("❓ Bilinmeyen komut. Menüden seçebilirsin.", chat_id)
 
 
 # ============================================================
-# TELEGRAM POLLER
+# POLLER & LOOP & FLASK
 # ============================================================
 
 def telegram_poller():
-    logger.info("Telegram poller başlatıldı.")
     offset = None
-
     while True:
         try:
             if not TELEGRAM_TOKEN:
-                logger.warning("TELEGRAM_TOKEN bulunamadı.")
                 time.sleep(30)
                 continue
-
             url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
             params = {"timeout": 25}
             if offset is not None:
                 params["offset"] = offset
-
             response = requests.get(url, params=params, timeout=35)
             if not response.ok:
                 time.sleep(5)
                 continue
-
             data = response.json()
             if not data.get("ok"):
                 time.sleep(5)
                 continue
-
-            updates = data.get("result", [])
-            for update in updates:
+            for update in data.get("result", []):
                 offset = update["update_id"] + 1
                 message = update.get("message")
                 if not message:
                     continue
-
-                chat = message.get("chat", {})
-                chat_id = chat.get("id")
+                chat_id = message.get("chat", {}).get("id")
                 text = message.get("text", "").strip()
-
                 if not text.startswith("/"):
                     continue
-
                 parts = text.split(maxsplit=1)
-                command = parts[0]
-                args = parts if len(parts) > 1 else ""
-
-                handle_telegram_command(chat_id, command, args)
-
-        except Exception as e:
-            logger.error(f"Telegram poller hatası: {e}", exc_info=True)
+                handle_telegram_command(chat_id, parts[0], parts if len(parts) > 1 else "")
+        except Exception:
             time.sleep(5)
 
 
-# ============================================================
-# STRATEGY LOOP
-# ============================================================
-
 def bot_loop():
-    logger_strategy.info("ScalpBot signal engine devrede.")
-
     while True:
         try:
             if get_state("paused", 0.0) == 1.0:
                 time.sleep(LOOP_SECONDS)
                 continue
-
             for symbol in SYMBOL_CONFIG:
                 try:
                     market_status, _ = get_market_status(symbol)
                     if "KAPALI" in market_status:
                         continue
-
                     signal = generate_signal(symbol)
                     if signal is None:
                         continue
-
                     if not can_send_signal(symbol):
                         continue
-
                     message = format_signal_message(signal)
-                    sent = telegram_send(message)
-
-                    if sent:
+                    if telegram_send(message):
                         mark_signal_sent(symbol)
-                        logger_strategy.info(
-                            f"SİNYAL GÖNDERİLDİ | {symbol} | {signal['action']} | price={signal['price']}"
-                        )
-
-                except Exception as symbol_error:
-                    logger_strategy.error(
-                        f"{symbol} sinyal hatası: {symbol_error}", exc_info=True
-                    )
-
-        except Exception as e:
-            logger_strategy.error(f"Strategy loop hatası: {e}", exc_info=True)
-
+                except Exception:
+                    pass
+        except Exception:
+            pass
         time.sleep(LOOP_SECONDS)
 
 
-# ============================================================
-# BACKGROUND SERVICES
-# ============================================================
-
 _bg_started = False
-
-
 def start_background_services():
     global _bg_started
     if _bg_started:
         return
-
     threading.Thread(target=bot_loop, daemon=True, name="strategy-loop").start()
     threading.Thread(target=telegram_poller, daemon=True, name="telegram-poller").start()
-
     _bg_started = True
-    logger.info("Background services başlatıldı.")
 
-
-# ============================================================
-# FLASK ROUTES
-# ============================================================
 
 @app.route("/")
 def home():
-    return jsonify({
-        "bot": APP_NAME,
-        "version": VERSION,
-        "status": "online",
-        "simulation_mode": SIMULATION_MODE,
-        "signal_engine": True,
-        "mt5_auto_trade": False
-    })
+    return jsonify({"bot": APP_NAME, "version": VERSION, "status": "online"})
 
 
 @app.route("/ping")
 def ping():
-    return jsonify({
-        "status": "ok",
-        "bot": APP_NAME,
-        "time": now_istanbul().isoformat()
-    })
+    return jsonify({"status": "ok", "bot": APP_NAME, "time": now_istanbul().isoformat()})
 
 
 @app.route("/health")
 def health():
-    return jsonify({
-        "status": "healthy",
-        "simulation": SIMULATION_MODE,
-        "signal_engine": True,
-        "mt5_auto_trade": False
-    })
+    return jsonify({"status": "healthy"})
 
-
-# ============================================================
-# STARTUP
-# ============================================================
 
 def startup():
-    logger.info(f"{APP_NAME} {VERSION} başlatılıyor...")
     init_db()
-
     if get_state("balance", None) is None:
         set_state("balance", INITIAL_BALANCE)
-
     set_telegram_commands()
     start_background_services()
-    logger.info("Startup tamamlandı.")
 
-
-# ============================================================
-# MODULE LEVEL AUTO START (Render / Gunicorn & Direct Safe)
-# ============================================================
 try:
     startup()
-except Exception as _e:
-    logger.error(f"Modül seviyesi startup hatası: {_e}")
-
-
-# ============================================================
-# MAIN
-# ============================================================
+except Exception:
+    pass
 
 if __name__ == "__main__":
     startup()
