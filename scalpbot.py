@@ -1660,10 +1660,10 @@ olursa sinyal oluşturulur.
     # TEST
     # --------------------------------------------------------
 
-    if command == "/test":
+if command == "/test":
 
-telegram_send(
-    """
+        telegram_send(
+            """
 🔎 <b>SİNYAL TARAMASI</b>
 
 ━━━━━━━━━━━━━━━━━━
@@ -1679,8 +1679,8 @@ telegram_send(
 
 Piyasa verileri kontrol ediliyor...
 """,
-    chat_id
-)
+            chat_id
+        )
 
         signals = get_signal_preview()
 
