@@ -395,7 +395,97 @@ def telegram_send(message, chat_id=None):
         )
 
     return False
+# ============================================================
+# TELEGRAM COMMAND MENU
+# ============================================================
 
+def set_telegram_commands():
+
+    if not TELEGRAM_TOKEN:
+        logger.warning(
+            "TELEGRAM_TOKEN yok, komut menüsü kurulamadı."
+        )
+        return False
+
+    url = (
+        f"https://api.telegram.org/bot"
+        f"{TELEGRAM_TOKEN}/setMyCommands"
+    )
+
+    commands = {
+        "commands": [
+            {
+                "command": "start",
+                "description": "🤖 SCALPRADAR'ı başlat"
+            },
+            {
+                "command": "durum",
+                "description": "📡 Bot ve sistem durumu"
+            },
+            {
+                "command": "bakiye",
+                "description": "💰 Demo bakiye"
+            },
+            {
+                "command": "istatistik",
+                "description": "📊 İşlem istatistikleri"
+            },
+            {
+                "command": "risk",
+                "description": "🛡️ Risk durumu"
+            },
+            {
+                "command": "pozisyonlar",
+                "description": "📂 Açık pozisyonlar"
+            },
+            {
+                "command": "fiyat",
+                "description": "💹 Güncel piyasa fiyatları"
+            },
+            {
+                "command": "sinyaller",
+                "description": "📡 Sinyal motoru durumu"
+            },
+            {
+                "command": "test",
+                "description": "🔎 Anlık sinyal taraması"
+            },
+            {
+                "command": "reset",
+                "description": "♻️ Bot durumunu sıfırla"
+            }
+        ]
+    }
+
+    try:
+
+        response = requests.post(
+            url,
+            json=commands,
+            timeout=15
+        )
+
+        if response.ok:
+
+            logger.info(
+                "Telegram komut menüsü başarıyla kuruldu."
+            )
+
+            return True
+
+        logger.error(
+            "Telegram komut menüsü hatası: "
+            f"{response.status_code} "
+            f"{response.text}"
+        )
+
+    except Exception as e:
+
+        logger.error(
+            f"Telegram komut menüsü bağlantı hatası: {e}"
+        )
+
+    return False
 
 # ============================================================
 # FORMAT HELPERS
