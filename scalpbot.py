@@ -1099,24 +1099,37 @@ def get_signal_preview():
 # ============================================================
 
 def get_market_status(symbol):
-
     try:
+        now = datetime.now(TZ)
+        weekday = now.weekday()  # Pazartesi=0, Pazar=6
+        current_time = now.time()
 
-        df = fetch_market_data(
-            symbol,
-            interval="5m",
-            period="1d"
-        )
+        # Hafta sonu
+        if weekday >= 5:
+            return "KAPALI", "Hafta sonu"
 
-        if df is None or df.empty:
-            return "KAPALI", "Veri alınamadı"
+        # EURUSD / GBPUSD / USDJPY
+        # Forex piyasası hafta içi 24 saate yakın çalışır.
+        if symbol in ["EURUSD", "GBPUSD", "USDJPY"]:
+            return "AÇIK", "Forex piyasası aktif"
 
-        return "AÇIK", "Veri aktif"
+        # XAUUSD (Altın)
+        # Hafta içi aktif, günlük kısa rollover arası bulunabilir.
+        if symbol == "XAUUSD":
+
+            # Türkiye saatiyle yaklaşık günlük bakım/rollover aralığı
+            rollover_start = time(00, 0)
+            rollover_end = time(01, 5)
+
+            if rollover_start <= current_time < rollover_end:
+                return "KAPALI", "Günlük rollover/bakım aralığı"
+
+            return "AÇIK", "Altın piyasası aktif"
+
+        return "BİLİNMİYOR", "Tanımsız sembol"
 
     except Exception as e:
-
-        return "KAPALI", str(e)
-
+        return "KAPALI", f"Durum kontrol hatası: {e}"
 
 # ============================================================
 # TELEGRAM AUTH
