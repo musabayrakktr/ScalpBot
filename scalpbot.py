@@ -1718,6 +1718,7 @@ bir sinyal bulunamadı.
 
         with DB_LOCK:
 
+
             conn = db_connect()
             cur = conn.cursor()
 
