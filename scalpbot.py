@@ -492,8 +492,8 @@ def get_open_position_stats():
     cnt = int(row[0]) if row and row[0] is not None else 0
 
     total_open_risk = (
-        float(row[1])
-        if row and len(row) > 1 and row[1] is not None
+        float(row)
+        if row and len(row) > 1 and row is not None
         else 0.0
     )
 
@@ -528,8 +528,8 @@ def atomic_add_position_safely(
         cnt = int(row[0]) if row and row[0] is not None else 0
 
         total_open_risk = (
-            float(row[1])
-            if row and len(row) > 1 and row[1] is not None
+            float(row)
+            if row and len(row) > 1 and row is not None
             else 0.0
         )
 
@@ -615,7 +615,6 @@ def fetch_market_data(
     if df is None or df.empty:
         return None
 
-    # Yahoo bazen MultiIndex döndürüyor.
     if isinstance(df.columns, pd.MultiIndex):
 
         try:
@@ -906,6 +905,8 @@ def mark_signal_sent(symbol):
 
         conn.commit()
         conn.close()
+
+
 # ============================================================
 # SCALPBOT PRO — PART 2 / 2
 # SIGNAL ENGINE + TELEGRAM + COMMAND MENU + FLASK
@@ -1136,24 +1137,17 @@ def get_signal_preview():
 def get_market_status(symbol):
     try:
         now = datetime.now(TZ)
-        weekday = now.weekday()  # Pazartesi=0, Pazar=6
+        weekday = now.weekday()
         current_time = now.time()
 
-        # Hafta sonu
         if weekday >= 5:
             return "KAPALI", "Hafta sonu"
 
-        # EURUSD / GBPUSD / USDJPY
-        # Forex piyasası hafta içi 24 saate yakın çalışır.
-        if symbol in ["EURUSD", "GBPUSD", "USDJPY"]:
+        if symbol in ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"]:
             return "AÇIK", "Forex piyasası aktif"
 
-        # XAUUSD (Altın)
-        # Hafta içi aktif, günlük kısa rollover arası bulunabilir.
         if symbol == "XAUUSD":
-
-            # Türkiye saatiyle yaklaşık günlük bakım/rollover aralığı
-            rollover_start = time(00, 0)
+            rollover_start = time(0, 0)
             rollover_end = time(1, 5)
 
             if rollover_start <= current_time < rollover_end:
@@ -1165,6 +1159,7 @@ def get_market_status(symbol):
 
     except Exception as e:
         return "KAPALI", f"Durum kontrol hatası: {e}"
+
 
 # ============================================================
 # TELEGRAM AUTH
@@ -1342,7 +1337,7 @@ gönderilir.
     # DURUM
     # --------------------------------------------------------
 
-    if command == "/durum":
+    elif command == "/durum":
 
         paused = (
             get_state("paused", 0.0) == 1.0
@@ -1399,7 +1394,7 @@ SIMULATION
     # BAKİYE
     # --------------------------------------------------------
 
-    if command == "/bakiye":
+    elif command == "/bakiye":
 
         balance = get_state(
             "balance",
@@ -1429,7 +1424,7 @@ SIMULATION
     # RİSK
     # --------------------------------------------------------
 
-    if command == "/risk":
+    elif command == "/risk":
 
         open_count, open_risk = (
             get_open_position_stats()
@@ -1465,7 +1460,7 @@ ${open_risk:.2f}
     # POZİSYONLAR
     # --------------------------------------------------------
 
-    if command == "/pozisyonlar":
+    elif command == "/pozisyonlar":
 
         with DB_LOCK:
 
@@ -1510,10 +1505,10 @@ ${open_risk:.2f}
         for row in rows:
 
             symbol = row[0]
-            side = row[1]
-            entry = row[2]
-            sl = row[3]
-            tp = row[4]
+            side = row
+            entry = row
+            sl = row
+            tp = row
             risk = row[5]
 
             digits = SYMBOL_CONFIG.get(
@@ -1551,7 +1546,7 @@ ${open_risk:.2f}
     # FİYAT
     # --------------------------------------------------------
 
-    if command == "/fiyat":
+    elif command == "/fiyat":
 
         text = (
             "💹 <b>GÜNCEL FİYATLAR</b>\n\n"
@@ -1619,7 +1614,7 @@ ${open_risk:.2f}
     # SİNYALLER
     # --------------------------------------------------------
 
-    if command == "/sinyaller":
+    elif command == "/sinyaller":
 
         telegram_send(
             """
@@ -1660,7 +1655,7 @@ olursa sinyal oluşturulur.
     # TEST
     # --------------------------------------------------------
 
-if command == "/test":
+    elif command == "/test":
 
         telegram_send(
             """
@@ -1714,10 +1709,9 @@ bir sinyal bulunamadı.
     # İSTATİSTİK
     # --------------------------------------------------------
 
-    if command == "/istatistik":
+    elif command == "/istatistik":
 
         with DB_LOCK:
-
 
             conn = db_connect()
             cur = conn.cursor()
@@ -1740,8 +1734,8 @@ bir sinyal bulunamadı.
         )
 
         total_pnl = (
-            float(row[1])
-            if row
+            float(row)
+            if row and len(row) > 1 and row is not None
             else 0.0
         )
 
@@ -1772,7 +1766,7 @@ garanti etmez.
     # RESET
     # --------------------------------------------------------
 
-    if command == "/reset":
+    elif command == "/reset":
 
         set_state(
             "paused",
@@ -1801,8 +1795,10 @@ garanti etmez.
     # UNKNOWN
     # --------------------------------------------------------
 
-    telegram_send(
-        """
+    else:
+
+        telegram_send(
+            """
 ❓ <b>Bilinmeyen komut.</b>
 
 📋 Menüden bir komut seçebilirsin.
@@ -1813,8 +1809,8 @@ garanti etmez.
 /sinyaller
 /fiyat
 """,
-        chat_id
-    )
+            chat_id
+        )
 
 
 # ============================================================
@@ -1914,7 +1910,7 @@ def telegram_poller():
                 command = parts[0]
 
                 args = (
-                    parts[1]
+                    parts
                     if len(parts) > 1
                     else ""
                 )
@@ -2107,10 +2103,8 @@ def startup():
         f"{APP_NAME} {VERSION} başlatılıyor..."
     )
 
-    # Database
     init_db()
 
-    # İlk demo bakiye
     if get_state(
         "balance",
         None
@@ -2121,15 +2115,21 @@ def startup():
             INITIAL_BALANCE
         )
 
-    # Telegram komut menüsünü kur
     set_telegram_commands()
-
-    # Arka plan servislerini başlat
     start_background_services()
 
     logger.info(
         "Startup tamamlandı."
     )
+
+
+# ============================================================
+# MODULE LEVEL AUTO START (Render / Gunicorn & Direct Safe)
+# ============================================================
+try:
+    startup()
+except Exception as _e:
+    logger.error(f"Modül seviyesi startup hatası: {_e}")
 
 
 # ============================================================
