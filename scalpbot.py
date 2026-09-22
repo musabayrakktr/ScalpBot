@@ -1662,21 +1662,25 @@ olursa sinyal oluşturulur.
 
     if command == "/test":
 
-        telegram_send(
-            """
+telegram_send(
+    """
 🔎 <b>SİNYAL TARAMASI</b>
 
 ━━━━━━━━━━━━━━━━━━
 
 ⏳ EURUSD
-⏳ XAUUSD
-⏳ USDJPY
 ⏳ GBPUSD
+⏳ USDJPY
+⏳ AUDUSD
+⏳ USDCAD
+⏳ USDCHF
+⏳ NZDUSD
+⏳ XAUUSD
 
 Piyasa verileri kontrol ediliyor...
 """,
-            chat_id
-        )
+    chat_id
+)
 
         signals = get_signal_preview()
 
