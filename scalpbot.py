@@ -67,36 +67,70 @@ LOOP_SECONDS = 30
 # ============================================================
 
 SYMBOL_CONFIG = {
+    # =========================
+    # FOREX MAJORS
+    # =========================
 
     "EURUSD": {
         "yf": "EURUSD=X",
         "sl_atr": 1.5,
         "tp_atr": 3.0,
-        "digits": 5,
-    },
-
-    "XAUUSD": {
-        "yf": "XAU=X",
-        "sl_atr": 1.2,
-        "tp_atr": 2.5,
-        "digits": 2,
-    },
-
-    "USDJPY": {
-        "yf": "USDJPY=X",
-        "sl_atr": 1.5,
-        "tp_atr": 3.0,
-        "digits": 3,
+        "digits": 5
     },
 
     "GBPUSD": {
         "yf": "GBPUSD=X",
         "sl_atr": 1.5,
         "tp_atr": 3.0,
-        "digits": 5,
+        "digits": 5
+    },
+
+    "USDJPY": {
+        "yf": "USDJPY=X",
+        "sl_atr": 1.5,
+        "tp_atr": 3.0,
+        "digits": 3
+    },
+
+    "AUDUSD": {
+        "yf": "AUDUSD=X",
+        "sl_atr": 1.5,
+        "tp_atr": 3.0,
+        "digits": 5
+    },
+
+    "USDCAD": {
+        "yf": "USDCAD=X",
+        "sl_atr": 1.5,
+        "tp_atr": 3.0,
+        "digits": 5
+    },
+
+    "USDCHF": {
+        "yf": "USDCHF=X",
+        "sl_atr": 1.5,
+        "tp_atr": 3.0,
+        "digits": 5
+    },
+
+    "NZDUSD": {
+        "yf": "NZDUSD=X",
+        "sl_atr": 1.5,
+        "tp_atr": 3.0,
+        "digits": 5
+    },
+
+    # =========================
+    # GOLD
+    # =========================
+
+    "XAUUSD": {
+        "yf": "XAU=X",
+        "sl_atr": 1.2,
+        "tp_atr": 2.5,
+        "digits": 2
     },
 }
-
 
 # ============================================================
 # LOGGING
