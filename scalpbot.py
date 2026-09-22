@@ -1120,7 +1120,7 @@ def get_market_status(symbol):
 
             # Türkiye saatiyle yaklaşık günlük bakım/rollover aralığı
             rollover_start = time(00, 0)
-            rollover_end = time(01, 5)
+            rollover_end = time(1, 5)
 
             if rollover_start <= current_time < rollover_end:
                 return "KAPALI", "Günlük rollover/bakım aralığı"
