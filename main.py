@@ -12,6 +12,7 @@ app = Flask(__name__)
 
 
 @app.route("/")
+@app.route("/ping")
 def health_check():
   return "ScalpBot is alive!", 200
 
@@ -262,7 +263,6 @@ def evaluate_scalp_strategy(symbol):
       sl = last_close + sl_dist
       tp = last_close - tp_dist
 
-    # Risk bazlı lot hesaplama (%1.5 risk)
     risk_usd = virtual_balance * 0.015
     sl_diff = abs(last_close - sl)
     pip_mult = (
@@ -272,7 +272,6 @@ def evaluate_scalp_strategy(symbol):
     raw_lot = (risk_usd / pip_val) if pip_val > 0 else 0.1
     lot_size = round(max(0.01, min(raw_lot, 5.0)), 2)
 
-    # Pariteye göre hassasiyet (XAUUSD=2, JPY=3, diğerleri=5)
     dig = 2 if symbol == "XAUUSD" else (3 if "JPY" in symbol else 5)
 
     return {
