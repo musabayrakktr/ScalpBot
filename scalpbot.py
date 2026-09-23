@@ -1,5 +1,5 @@
 # ============================================================
-# SCALPBOT PRO — TELEGRAM SIGNAL BOT (TAM VE HATASIZ v4.2)
+# SCALPBOT PRO — TELEGRAM SIGNAL BOT (TAM VE HATASIZ v4.3 + LOT)
 # ============================================================
 
 import os
@@ -27,7 +27,7 @@ from flask import Flask, jsonify
 # ============================================================
 
 APP_NAME = "ScalpBot Pro"
-VERSION = "4.2-SIGNAL"
+VERSION = "4.3-SIGNAL-LOT"
 
 SIMULATION_MODE = True
 
@@ -45,10 +45,11 @@ WEB_PORT = int(os.getenv("PORT", "10000"))
 
 
 # ============================================================
-# RISK SETTINGS
+# RISK & LOT SETTINGS
 # ============================================================
 
 INITIAL_BALANCE = 3000.0
+ACCOUNT_RISK_PERCENT = 0.01  # İşlem başına bakiye risk yüzdesi (%1)
 
 MAX_DAILY_LOSS = 150.0
 MAX_OPEN_POSITIONS = 3
@@ -66,14 +67,14 @@ LOOP_SECONDS = 30
 # ============================================================
 
 SYMBOL_CONFIG = {
-    "EURUSD": {"yf": "EURUSD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5},
-    "GBPUSD": {"yf": "GBPUSD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5},
-    "USDJPY": {"yf": "USDJPY=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 3},
-    "AUDUSD": {"yf": "AUDUSD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5},
-    "USDCAD": {"yf": "USDCAD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5},
-    "USDCHF": {"yf": "USDCHF=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5},
-    "NZDUSD": {"yf": "NZDUSD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5},
-    "XAUUSD": {"yf": "GC=F", "sl_atr": 1.2, "tp_atr": 2.5, "digits": 2},
+    "EURUSD": {"yf": "EURUSD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5, "contract_size": 100000},
+    "GBPUSD": {"yf": "GBPUSD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5, "contract_size": 100000},
+    "USDJPY": {"yf": "USDJPY=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 3, "contract_size": 100000},
+    "AUDUSD": {"yf": "AUDUSD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5, "contract_size": 100000},
+    "USDCAD": {"yf": "USDCAD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5, "contract_size": 100000},
+    "USDCHF": {"yf": "USDCHF=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5, "contract_size": 100000},
+    "NZDUSD": {"yf": "NZDUSD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5, "contract_size": 100000},
+    "XAUUSD": {"yf": "GC=F", "sl_atr": 1.2, "tp_atr": 2.5, "digits": 2, "contract_size": 100},
 }
 
 
@@ -333,14 +334,13 @@ def now_istanbul():
 
 
 # ============================================================
-# POSITION / RISK HELPERS (CRITICAL TUPLE FIX)
+# POSITION / RISK HELPERS
 # ============================================================
 
 def get_open_position_stats():
     with DB_LOCK:
         conn = db_connect()
         cur = conn.cursor()
-
         cur.execute("""
             SELECT
                 COUNT(*),
@@ -348,62 +348,42 @@ def get_open_position_stats():
             FROM positions
             WHERE status = 'OPEN'
         """)
-
         row = cur.fetchone()
         conn.close()
-
-    if not row:
-        return 0, 0.0
 
     cnt = int(row[0]) if row and row[0] is not None else 0
-total_open_risk = float(row[1]) if row and len(row) > 1 and row[1] is not None else 0.0
+    total_open_risk = float(row) if row and len(row) > 1 and row is not None else 0.0
+    return cnt, total_open_risk
 
-def atomic_add_position_safely(
-    symbol, side, entry, sl, tp, risk
-):
-    with DB_LOCK:
-        conn = db_connect()
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT
-                COUNT(*),
-                COALESCE(SUM(risk), 0)
-            FROM positions
-            WHERE status = 'OPEN'
-        """)
-        row = cur.fetchone()
 
-        cnt = int(row[0]) if row and row[0] is not None else 0
-        total_open_risk = float(row) if row and len(row) > 1 and row is not None else 0.0
+def calculate_position_size(symbol, entry, sl):
+    try:
+        balance = get_state("balance", INITIAL_BALANCE)
+        risk_dollar = balance * ACCOUNT_RISK_PERCENT
+        config = SYMBOL_CONFIG.get(symbol, {})
+        digits = config.get("digits", 5)
+        contract = config.get("contract_size", 100000)
 
-        if cnt >= MAX_OPEN_POSITIONS:
-            conn.close()
-            return False, "MAX_OPEN_POSITIONS"
+        sl_distance = abs(float(entry) - float(sl))
+        if sl_distance <= 0:
+            return 0.01
 
-        if total_open_risk + float(risk) > MAX_TOTAL_OPEN_RISK:
-            conn.close()
-            return False, "MAX_TOTAL_OPEN_RISK"
+        # Pip değeri ölçeklendirme (5 hane forex için pip = 0.0001, 3 hane için 0.01, altın için 1.0)
+        pip_unit = 0.0001 if digits == 5 else (0.01 if digits == 3 else 1.0)
+        pips_to_sl = sl_distance / pip_unit
 
-        cur.execute("""
-            INSERT INTO positions(
-                symbol, side, entry, sl, tp, risk, opened_at, status
-            )
-            VALUES(?, ?, ?, ?, ?, ?, ?, 'OPEN')
-        """, (
-            symbol,
-            side,
-            float(entry),
-            float(sl),
-            float(tp),
-            float(risk),
-            now_istanbul().isoformat()
-        ))
+        if pips_to_sl <= 0:
+            return 0.01
 
-        conn.commit()
-        position_id = cur.lastrowid
-        conn.close()
+        # Lot hesabı: Risk ($) / (Pip to SL * Pip Value per lot)
+        # Standart forex pip value for 1 lot on USD-quoted pairs ~= 10 USD per pip per 100k standard lot
+        pip_value_per_lot = 10.0 if contract == 100000 else 1.0
+        lot_size = risk_dollar / (pips_to_sl * pip_value_per_lot)
 
-    return True, position_id
+        # Min 0.01, 2 hane yuvarla
+        return max(0.01, round(lot_size, 2))
+    except Exception:
+        return 0.10
 
 
 # ============================================================
@@ -636,6 +616,7 @@ def generate_signal(symbol):
             sl = price + sl_distance
             tp = price - tp_distance
 
+        lot_size = calculate_position_size(symbol, price, sl)
         digits = config["digits"]
 
         return {
@@ -644,6 +625,7 @@ def generate_signal(symbol):
             "price": round(price, digits),
             "sl": round(sl, digits),
             "tp": round(tp, digits),
+            "lot": lot_size,
             "rsi": round(rsi, 2),
             "ema9": round(ema9, digits),
             "ema21": round(ema21, digits),
@@ -678,6 +660,7 @@ def format_signal_message(signal):
 💰 <b>Entry:</b> {format_price(signal["price"], digits)}
 🛑 <b>SL:</b> {format_price(signal["sl"], digits)}
 🎯 <b>TP:</b> {format_price(signal["tp"], digits)}
+📦 <b>Önerilen Lot:</b> <b>{signal.get('lot', 0.10)} lot</b>
 
 📊 <b>Skor:</b> {score}/4
 
@@ -713,14 +696,10 @@ def get_market_status(symbol):
     try:
         now = datetime.now(TZ)
         weekday = now.weekday()
-        current_time = now.time()
-
         if weekday >= 5:
             return "KAPALI", "Hafta sonu"
-
         if symbol in ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD", "XAUUSD"]:
             return "AÇIK", "Piyasa aktif"
-
         return "BİLİNMİYOR", "Tanımsız sembol"
     except Exception as e:
         return "KAPALI", f"Hata: {e}"
@@ -768,7 +747,7 @@ def handle_telegram_command(chat_id, command, args=""):
         return
 
     if clean_command == "/start":
-        telegram_send("🤖 <b>SCALPRADAR</b>\n🟢 Sinyal Motoru: AKTİF\n🧪 Mod: SIMULATION", chat_id)
+        telegram_send("🤖 <b>SCALPRADAR v4.3</b>\n🟢 Sinyal Motoru: AKTİF\n📦 Parite Bazlı Lot Analizi: AKTİF", chat_id)
         return
 
     elif clean_command == "/durum":
@@ -785,7 +764,7 @@ def handle_telegram_command(chat_id, command, args=""):
 
     elif clean_command == "/risk":
         open_count, open_risk = get_open_position_stats()
-        telegram_send(f"🛡️ <b>RİSK MERKEZİ</b>\nMax Günlük Zarar: ${MAX_DAILY_LOSS:.2f}\nMevcut Risk: ${open_risk:.2f} / ${MAX_TOTAL_OPEN_RISK:.2f}", chat_id)
+        telegram_send(f"🛡️ <b>RİSK MERKEZİ</b>\nRisk Yüzdesi: %{ACCOUNT_RISK_PERCENT*100}\nMax Günlük Zarar: ${MAX_DAILY_LOSS:.2f}\nMevcut Risk: ${open_risk:.2f} / ${MAX_TOTAL_OPEN_RISK:.2f}", chat_id)
         return
 
     elif clean_command == "/pozisyonlar":
@@ -842,43 +821,18 @@ def handle_telegram_command(chat_id, command, args=""):
         return
 
     elif clean_command == "/istatistik":
-    with DB_LOCK:
-        conn = db_connect()
-        cur = conn.cursor()
+        with DB_LOCK:
+            conn = db_connect()
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*), COALESCE(SUM(pnl), 0) FROM closed_trades")
+            row = cur.fetchone()
+            conn.close()
 
-        cur.execute("""
-            SELECT
-                COUNT(*),
-                COALESCE(SUM(pnl), 0)
-            FROM closed_trades
-        """)
+        total_trades = int(row[0]) if row and row[0] is not None else 0
+        total_pnl = float(row) if row and len(row) > 1 and row is not None else 0.0
 
-        row = cur.fetchone()
-        conn.close()
-
-    total_trades = (
-        int(row[0])
-        if row and row[0] is not None
-        else 0
-    )
-
-    total_pnl = (
-        float(row[1])
-        if row and len(row) > 1 and row[1] is not None
-        else 0.0
-    )
-
-    telegram_send(
-        f"""
-📊 <b>İSTATİSTİK</b>
-
-Toplam İşlem: {total_trades}
-Toplam PnL: {format_signed_pnl(total_pnl)}
-""",
-        chat_id
-    )
-
-    return
+        telegram_send(f"📊 <b>İSTATİSTİK</b>\nToplam İşlem: {total_trades}\nToplam PnL: {format_signed_pnl(total_pnl)}", chat_id)
+        return
 
     elif clean_command == "/reset":
         set_state("paused", 0)
