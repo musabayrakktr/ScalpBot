@@ -6103,6 +6103,28 @@ DASHBOARD_HTML = r"""<!doctype html>
 @media(max-width:1150px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.sectiongrid{grid-template-columns:1fr}.twocol{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.layout{grid-template-columns:1fr}.side{display:none}main{padding:17px 12px 25px}.top{align-items:flex-start}.top h1{font-size:20px}.topright .pill:first-child{display:none}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.card{padding:13px}.metric strong{font-size:19px}.ico{width:36px;height:36px}.twocol{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.stat:nth-child(2){border:0}.chartwrap{height:220px}.cardhead h2{font-size:15px}}
 @media(max-width:390px){.grid{grid-template-columns:1fr 1fr}.metric{gap:8px}.metric strong{font-size:17px}}
+/* v5.1 responsive polish + restrained motion */
+html{scroll-behavior:smooth;scroll-padding-top:18px}
+.card{transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease;animation:cardIn .55s both}
+.card:hover{transform:translateY(-3px);border-color:#28557d;box-shadow:0 12px 28px #0003}
+.grid .card:nth-child(2){animation-delay:.05s}.grid .card:nth-child(3){animation-delay:.1s}.grid .card:nth-child(4){animation-delay:.15s}.grid .card:nth-child(5){animation-delay:.2s}
+@keyframes cardIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes onlinePulse{0%,100%{box-shadow:0 0 0 0 #00d6a044}50%{box-shadow:0 0 0 6px #00d6a000}}
+.dot{animation:onlinePulse 2.2s infinite}
+.nav a{transition:background .18s ease,transform .18s ease}.nav a:hover{transform:translateX(3px)}
+.tag,button,select{transition:filter .18s ease,transform .18s ease}.tag:hover,button:hover{filter:brightness(1.12)}
+.market-table tbody tr,.trades tbody tr{transition:background .18s ease}.market-table tbody tr:hover,.trades tbody tr:hover{background:#102944}
+.mobile-nav{display:none}
+@media(max-width:760px){
+ main{padding:14px 11px calc(88px + env(safe-area-inset-bottom))}
+ .top{gap:8px;flex-direction:column;margin-bottom:15px}.topright{width:100%;justify-content:space-between;gap:7px}.topright .pill:first-child{display:block;font-size:11px;padding:7px 9px}.topright .pill:last-child{font-size:11px;padding:7px 9px}
+ .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.card{padding:12px;border-radius:12px}.metric{align-items:flex-start;gap:8px}.metric strong{font-size:clamp(16px,4.4vw,20px);overflow-wrap:anywhere}.metric label{font-size:11px}.metric small{font-size:10px}.ico{flex:0 0 32px;width:32px;height:32px;font-size:17px}
+ .sectiongrid,.twocol{grid-template-columns:minmax(0,1fr);gap:11px;margin-top:11px}.chartwrap{height:205px}.cardhead{align-items:flex-start;flex-wrap:wrap}.cardhead h2{font-size:14px}.cardhead .tag{max-width:100%;white-space:normal}.scroll{max-width:100%;overscroll-behavior-x:contain}.market-table,.trades{min-width:570px}.stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.stat{padding:5px 7px}.stat strong{font-size:17px}.foot{font-size:10px;flex-direction:column;margin-bottom:3px}
+ .mobile-nav{position:fixed;z-index:50;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;padding:7px 5px calc(7px + env(safe-area-inset-bottom));background:rgba(5,16,31,.96);border-top:1px solid #1b3857;backdrop-filter:blur(14px);box-shadow:0 -8px 24px #0004}
+ .mobile-nav a{min-width:0;text-align:center;text-decoration:none;color:#91aac6;font-size:10px;padding:6px 1px;border-radius:9px;white-space:nowrap}.mobile-nav a span{display:block;font-size:17px;line-height:1.25;margin-bottom:3px}.mobile-nav a:active,.mobile-nav a.active{background:#10365b;color:#eaf5ff}
+}
+@media(max-width:360px){main{padding-left:8px;padding-right:8px}.grid{gap:6px}.card{padding:9px}.metric{gap:6px}.ico{display:none}.chartwrap{height:185px}.mobile-nav a{font-size:9px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
 </style></head><body><div class="layout">
 <aside class="side"><div class="brand"><div class="logo">S</div><div><b>SCALPBOT PRO</b><small>AI TRADING TERMINAL</small></div></div>
 <nav class="nav"><a class="active" href="#home">⌂　Ana Sayfa</a><a href="#market">▥　Piyasa Takibi</a><a href="#signals">◉　Sinyaller</a><a href="#history">◴　İşlem Geçmişi</a><a href="#performance">▤　Performans</a><a href="#analysis">✧　Strateji Analizi</a></nav>
@@ -6116,6 +6138,7 @@ DASHBOARD_HTML = r"""<!doctype html>
 <section class="card"><div class="cardhead"><h2>📂 Açık Pozisyonlar</h2><span class="tag">Manuel demo takibi</span></div><div class="scroll"><table class="trades"><thead><tr><th>Sembol</th><th>Yön</th><th>Giriş</th><th>Güncel</th><th>Lot</th></tr></thead><tbody id="positions"><tr><td colspan="5" class="empty">Yükleniyor…</td></tr></tbody></table></div></section></div>
 <section class="card" id="history" style="margin-top:16px"><div class="cardhead"><h2>🧾 Son Kapanan İşlemler</h2><span class="tag">En yeni 10 kayıt</span></div><div class="scroll"><table class="trades"><thead><tr><th>Sembol</th><th>Yön</th><th>Giriş</th><th>Çıkış</th><th>P&amp;L</th><th>Kapanış</th></tr></thead><tbody id="trades"><tr><td colspan="6" class="empty">İşlem geçmişi yükleniyor…</td></tr></tbody></table></div></section>
 <div class="foot"><span>⚠️ Bilgilendirme: Bu uygulama sinyal ve demo kayıt panelidir; broker emri göndermez.</span><span>Otomatik yenileme: 30 sn</span></div></main></div>
+<nav class="mobile-nav" aria-label="Hızlı gezinme"><a class="active" href="#home"><span>⌂</span>Ana Sayfa</a><a href="#market"><span>▥</span>Piyasa</a><a href="#signals"><span>◉</span>Sinyaller</a><a href="#history"><span>◴</span>Geçmiş</a><a href="#performance"><span>▤</span>Performans</a></nav>
 <script>
 const $=id=>document.getElementById(id); const money=n=>Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' USD';
 const safe=v=>(v===null||v===undefined||v===''?'—':v); const fmtDate=s=>{if(!s)return '—';try{return new Date(s).toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}catch(e){return s}};
@@ -6130,7 +6153,12 @@ $('positions').innerHTML=d.open_positions.length?d.open_positions.map(p=>`<tr><t
 $('trades').innerHTML=d.trades.length?d.trades.map(t=>`<tr><td><b>${t.symbol}</b></td><td><span class="badge ${t.side==='BUY'?'buy':'sell'}">${t.side}</span></td><td>${safe(t.entry)}</td><td>${safe(t.exit)}</td><td class="${Number(t.pnl)>=0?'green':'red'}">${money(t.pnl)}</td><td>${fmtDate(t.closed_at)}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">Henüz kapanmış işlem kaydı yok.</td></tr>';
 $('signalRows').innerHTML=d.signals&&d.signals.length?d.signals.map(s=>`<tr><td>${fmtDate(s.sent_at)}</td><td><b>${safe(s.symbol)}</b></td><td><span class="badge ${s.action==='BUY'?'buy':'sell'}">${safe(s.action)}</span></td><td>${safe(s.price)}</td><td>${safe(s.sl)}</td><td>${safe(s.tp)}</td><td>${safe(s.score)}/5</td><td>${s.rr==null?'—':'1:'+Number(s.rr).toFixed(2)}</td></tr>`).join(''):'<tr><td colspan="8" class="empty">Henüz kaydedilmiş sinyal yok. Yeni Telegram sinyalleri gönderildikçe burada görünecek.</td></tr>';draw(d.equity);}
 catch(e){$('status').textContent='API bağlantı hatası';$('sideStatus').textContent='BAĞLANTI HATASI';console.error(e)}}
-load();loadCandles();setInterval(load,30000);setInterval(loadCandles,60000);window.addEventListener('resize',()=>{load();loadCandles()});
+load();loadCandles();setInterval(load,30000);setInterval(loadCandles,60000);
+// Keep mobile quick-nav highlight in sync with the visible section.
+const navLinks=[...document.querySelectorAll('.mobile-nav a')];
+const sectionObserver=new IntersectionObserver(entries=>{entries.forEach(entry=>{if(entry.isIntersecting){navLinks.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+entry.target.id));}})},{rootMargin:'-18% 0px -68% 0px',threshold:0});
+['home','market','signals','history','performance'].forEach(id=>{const section=$(id);if(section)sectionObserver.observe(section)});
+window.addEventListener('resize',()=>{load();loadCandles()});
 </script></body></html>"""
 
 
