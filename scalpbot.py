@@ -51,10 +51,8 @@ SYMBOL_CONFIG = {
     "EURUSD": {"yf": "EURUSD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5, "contract_size": 100000},
     "GBPUSD": {"yf": "GBPUSD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5, "contract_size": 100000},
     "USDJPY": {"yf": "USDJPY=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 3, "contract_size": 100000},
-    "AUDUSD": {"yf": "AUDUSD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5, "contract_size": 100000},
     "USDCAD": {"yf": "USDCAD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5, "contract_size": 100000},
     "USDCHF": {"yf": "USDCHF=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5, "contract_size": 100000},
-    "NZDUSD": {"yf": "NZDUSD=X", "sl_atr": 1.5, "tp_atr": 3.0, "digits": 5, "contract_size": 100000},
     "XAUUSD": {"yf": "GC=F", "sl_atr": 1.2, "tp_atr": 2.5, "digits": 2, "contract_size": 100},
 }
 
@@ -552,7 +550,27 @@ def handle_telegram_command(chat_id, command, args=""):
 
     try:
         if clean == "/start":
-            telegram_send("🤖 <b>SCALPRADAR v4.3</b>\n🟢 Sinyal motoru: çalışıyor\n📦 Lot: yaklaşık tahmin\n🧪 Mod: sinyal/demo; gerçek emir yok.", chat_id)
+            telegram_send(
+                "╭━━━ 🤖 <b>SCALPRADAR PRO</b> ━━━╮\n"
+                "┃  📡 <b>Akıllı Sinyal Paneli</b>\n"
+                "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
+                "🟢 <b>Sistem:</b> Aktif\n"
+                "🧪 <b>Çalışma modu:</b> Demo / manuel sinyal\n"
+                "🛑 <b>Otomatik emir:</b> Kapalı\n"
+                "📊 <b>Takip edilenler (6):</b> EURUSD · GBPUSD · USDJPY · USDCAD · USDCHF · XAUUSD\n\n"
+                "<b>🧭 KOMUT MENÜSÜ</b>\n"
+                "💹 /fiyat — Takip edilenlerin fiyatları\n"
+                "🔎 /test — Şimdi sinyal taraması yap\n"
+                "📡 /sinyaller — Strateji bilgisi\n"
+                "📈 /durum — Bot ve kayıt durumu\n"
+                "💰 /bakiye — Demo bakiye\n"
+                "🛡️ /risk — Risk ayarları ve kayıtlar\n"
+                "📂 /pozisyonlar — Açık kayıtlar\n"
+                "📊 /istatistik — Kapanan işlem kayıtları\n"
+                "♻️ /reset — Duraklatma bayrağını kaldır\n\n"
+                "ℹ️ <i>Fiyatlar Yahoo Finance kaynaklıdır; broker kotasyonundan farklı olabilir. Lot/risk değerleri yaklaşık olup bot MT5'e emir göndermez.</i>",
+                chat_id
+            )
 
         elif clean == "/durum":
             paused = get_state("paused", 0.0) == 1.0
@@ -618,7 +636,7 @@ def handle_telegram_command(chat_id, command, args=""):
             telegram_send("📡 <b>SİNYAL MOTORU</b>\n4 teknik kontrolden en az 3'ü aynı yöndeyse sinyal üretir: EMA, RSI, MACD ve 1H trend. Bu prototip backtest/doğrulama garantisi vermez.", chat_id)
 
         elif clean == "/test":
-            telegram_send("🔎 <b>8 sembol için tarama başladı.</b> Veri sağlayıcısına bağlı olarak biraz sürebilir.", chat_id)
+            telegram_send("🔎 <b>6 sembol için tarama başladı.</b> Veri sağlayıcısına bağlı olarak biraz sürebilir.", chat_id)
             signals = get_signal_preview()
             if not signals:
                 telegram_send("ℹ️ <b>Sonuç:</b> Şartları sağlayan sinyal bulunamadı veya veri alınamadı. Render loglarını kontrol et.", chat_id)
