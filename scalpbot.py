@@ -59,7 +59,7 @@ from flask import Flask, jsonify, request
 
 APP_NAME = "ScalpBot Pro"
 
-VERSION = "4.6-SELECTIVE-MANUAL"
+VERSION = "5.0-DASHBOARD-INTEGRATED"
 
 SIMULATION_MODE = True
 
@@ -482,6 +482,30 @@ def init_db():
                 pnl REAL,
                 opened_at TEXT,
                 closed_at TEXT
+            )
+        """)
+
+        # ----------------------------------------------------
+        # DASHBOARD SIGNAL JOURNAL
+        # ----------------------------------------------------
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS signal_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT NOT NULL,
+                action TEXT NOT NULL,
+                price REAL,
+                sl REAL,
+                tp REAL,
+                lot REAL,
+                score INTEGER,
+                rr REAL,
+                trend TEXT,
+                rsi REAL,
+                adx REAL,
+                macd_hist REAL,
+                atr REAL,
+                bar_time TEXT,
+                sent_at TEXT NOT NULL
             )
         """)
 
@@ -5939,6 +5963,31 @@ def scan_symbols():
 
             if sent:
 
+                # Record the successful Telegram signal for dashboard history.
+                try:
+                    with DB_LOCK:
+                        conn = db_connect()
+                        try:
+                            conn.execute("""
+                                INSERT INTO signal_history
+                                (symbol, action, price, sl, tp, lot, score, rr,
+                                 trend, rsi, adx, macd_hist, atr, bar_time, sent_at)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (
+                                symbol, signal.get("action"), signal.get("price"),
+                                signal.get("sl"), signal.get("tp"), signal.get("lot"),
+                                signal.get("score"), signal.get("rr"), signal.get("trend"),
+                                signal.get("rsi"), signal.get("adx"),
+                                signal.get("macd_hist"), signal.get("atr"),
+                                str(signal.get("bar_time") or ""),
+                                now_istanbul().isoformat()
+                            ))
+                            conn.commit()
+                        finally:
+                            conn.close()
+                except Exception:
+                    logger.exception("Dashboard sinyal kaydı yazılamadı: %s", symbol)
+
                 mark_signal_sent(
                     symbol
                 )
@@ -6058,12 +6107,12 @@ DASHBOARD_HTML = r"""<!doctype html>
 <aside class="side"><div class="brand"><div class="logo">S</div><div><b>SCALPBOT PRO</b><small>AI TRADING TERMINAL</small></div></div>
 <nav class="nav"><a class="active" href="#home">⌂　Ana Sayfa</a><a href="#market">▥　Piyasa Takibi</a><a href="#signals">◉　Sinyaller</a><a href="#history">◴　İşlem Geçmişi</a><a href="#performance">▤　Performans</a><a href="#analysis">✧　Strateji Analizi</a></nav>
 <div class="sidebox"><div class="muted">BOT DURUMU</div><h3 style="margin:9px 0;color:var(--green)"><span class="dot"></span><span id="sideStatus">Kontrol ediliyor</span></h3><div class="muted" style="font-size:12px">Sinyal botu · Demo kayıtları</div><hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><div class="muted">Sürüm</div><b id="version">—</b><div class="muted" style="margin-top:10px">Sunucu</div><b>Render / Flask</b></div>
-</aside><main id="home"><header class="top"><div><h1>Trading Dashboard <span class="tag">V4.6</span></h1><p>SCALPBOT PRO · Hesap ve piyasa görünümü</p></div><div class="topright"><div class="pill"><span class="dot"></span><strong id="status">Bağlanıyor</strong></div><div class="pill" id="updated">Güncelleme bekleniyor</div></div></header>
+</aside><main id="home"><header class="top"><div><h1>Trading Dashboard <span class="tag">V5.0</span></h1><p>SCALPBOT PRO · Hesap ve piyasa görünümü</p></div><div class="topright"><div class="pill"><span class="dot"></span><strong id="status">Bağlanıyor</strong></div><div class="pill" id="updated">Güncelleme bekleniyor</div></div></header>
 <section class="grid"><div class="card metric"><div class="ico">▣</div><div><label>Demo Bakiye</label><strong id="balance">—</strong><small>USD · Simülasyon</small></div></div><div class="card metric"><div class="ico" style="color:var(--green)">↗</div><div><label>Bugünkü P&amp;L</label><strong id="today">—</strong><small>Kapalı demo işlemler</small></div></div><div class="card metric"><div class="ico" style="color:var(--purple)">◉</div><div><label>Toplam İşlem</label><strong id="count">—</strong><small>Kaydedilmiş kapanışlar</small></div></div><div class="card metric"><div class="ico" style="color:var(--gold)">◎</div><div><label>Kazanma Oranı</label><strong id="winrate">—</strong><small id="winloss">Kayıtlı sonuçlar</small></div></div><div class="card metric"><div class="ico">⌘</div><div><label>Açık Pozisyon</label><strong id="open">—</strong><small id="risk">Açık risk: —</small></div></div></section>
 <section class="card" id="livechart" style="margin-top:16px"><div class="cardhead"><h2>🕯️ Canlı Mum Grafiği</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="chartSymbol" class="tag" aria-label="Sembol seçimi"><option value="EURUSD">EURUSD</option><option value="GBPUSD">GBPUSD</option><option value="USDJPY">USDJPY</option><option value="USDCAD">USDCAD</option><option value="USDCHF">USDCHF</option><option value="XAUUSD" selected>XAUUSD</option></select><select id="chartInterval" class="tag" aria-label="Zaman dilimi"><option value="5m">M5</option><option value="15m">M15</option><option value="1h">H1</option><option value="4h">H4</option><option value="1d">D1</option></select><span class="tag" id="chartInfo">Yahoo Finance · fiyatlar gecikmeli olabilir</span></div></div><div class="chartwrap" style="height:330px"><canvas id="candleChart"></canvas></div><div class="muted" id="chartStatus" style="font-size:11px">Grafik yükleniyor…</div></section>
 <div class="sectiongrid"><section class="card" id="performance"><div class="cardhead"><h2>📈 Kâr / Zarar Eğrisi</h2><span class="tag">Gerçekleşmiş demo P&amp;L</span></div><div class="chartwrap"><canvas id="pnlChart"></canvas></div><div class="stats"><div class="stat"><label>Net P&amp;L</label><strong id="netpnl">—</strong></div><div class="stat"><label>Profit Factor</label><strong id="pf">—</strong></div><div class="stat"><label>Ort. Kazanç</label><strong id="avgwin">—</strong></div><div class="stat"><label>Max. Drawdown</label><strong id="dd">—</strong></div></div></section>
 <section class="card" id="market"><div class="cardhead"><h2>🌐 Piyasa Takibi</h2><span class="tag">Bot sembolleri</span></div><div class="scroll"><table class="market-table"><thead><tr><th>Sembol</th><th>Fiyat</th><th>Günlük %</th><th>Durum</th><th>Son güncelleme</th></tr></thead><tbody id="markets"><tr><td colspan="5" class="empty">Piyasa bilgileri yükleniyor…</td></tr></tbody></table></div><p class="muted" style="font-size:11px;margin:12px 0 0">Fiyatlar Yahoo Finance verisinden gelir; sağlayıcı gecikmeleri olabilir.</p></section></div>
-<div class="twocol"><section class="card" id="signals"><div class="cardhead"><h2>🎯 Sinyal / Strateji Durumu</h2><span class="tag">Canlı sinyal üretimi tetiklenmez</span></div><p class="muted">Bu sürümde geçmiş sinyaller veritabanına kaydedilmediğinden, panel sinyal geçmişi uydurmaz. Botun Telegram üzerinden gönderdiği sinyaller mevcut akışında devam eder.</p><div class="stats"><div class="stat"><label>Takip edilen sembol</label><strong id="symbolcount">—</strong></div><div class="stat"><label>Tarama ayarı</label><strong id="autoscan">—</strong></div></div></section>
+<div class="twocol"><section class="card" id="signals"><div class="cardhead"><h2>🎯 Sinyal / Strateji Durumu</h2><span class="tag">Canlı sinyal üretimi tetiklenmez</span></div><p class="muted">Telegram gönderimi başarılı olan sinyaller burada listelenir. Kayıtlar bu sürümden itibaren tutulur; önceki sinyaller geriye dönük oluşturulmaz.</p><div class="scroll"><table class="trades"><thead><tr><th>Zaman</th><th>Sembol</th><th>Yön</th><th>Entry</th><th>SL</th><th>TP</th><th>Skor</th><th>R:R</th></tr></thead><tbody id="signalRows"><tr><td colspan="8" class="empty">Sinyaller yükleniyor…</td></tr></tbody></table></div><div class="stats"><div class="stat"><label>Takip edilen sembol</label><strong id="symbolcount">—</strong></div><div class="stat"><label>Tarama ayarı</label><strong id="autoscan">—</strong></div></div></section>
 <section class="card"><div class="cardhead"><h2>📂 Açık Pozisyonlar</h2><span class="tag">Manuel demo takibi</span></div><div class="scroll"><table class="trades"><thead><tr><th>Sembol</th><th>Yön</th><th>Giriş</th><th>Güncel</th><th>Lot</th></tr></thead><tbody id="positions"><tr><td colspan="5" class="empty">Yükleniyor…</td></tr></tbody></table></div></section></div>
 <section class="card" id="history" style="margin-top:16px"><div class="cardhead"><h2>🧾 Son Kapanan İşlemler</h2><span class="tag">En yeni 10 kayıt</span></div><div class="scroll"><table class="trades"><thead><tr><th>Sembol</th><th>Yön</th><th>Giriş</th><th>Çıkış</th><th>P&amp;L</th><th>Kapanış</th></tr></thead><tbody id="trades"><tr><td colspan="6" class="empty">İşlem geçmişi yükleniyor…</td></tr></tbody></table></div></section>
 <div class="foot"><span>⚠️ Bilgilendirme: Bu uygulama sinyal ve demo kayıt panelidir; broker emri göndermez.</span><span>Otomatik yenileme: 30 sn</span></div></main></div>
@@ -6078,7 +6127,8 @@ $('chartSymbol').addEventListener('change',loadCandles);$('chartInterval').addEv
 async function load(){try{const r=await fetch('/api/dashboard',{cache:'no-store'});if(!r.ok)throw Error('API '+r.status);const d=await r.json();$('status').textContent=d.status==='online'?'Bot Servisi Çevrimiçi':'Servis Durumu';$('sideStatus').textContent=d.status==='online'?'ÇALIŞIYOR':'KONTROL';$('version').textContent=d.version;$('updated').textContent='Son güncelleme: '+fmtDate(d.time);$('balance').textContent=money(d.balance);pnl('today',d.today_pnl);$('count').textContent=d.stats.count;$('winrate').textContent=Number(d.stats.win_rate).toFixed(1)+'%';$('winloss').textContent=d.stats.wins+' kazanç · '+d.stats.losses+' kayıp';$('open').textContent=d.open_positions.length;$('risk').textContent='Açık risk: '+money(d.open_risk);pnl('netpnl',d.stats.total_pnl);$('pf').textContent=d.stats.profit_factor===null?'—':Number(d.stats.profit_factor).toFixed(2);$('avgwin').textContent=money(d.stats.average_win);pnl('dd',-Math.abs(d.stats.max_drawdown));$('symbolcount').textContent=d.symbols.length;$('autoscan').textContent=d.auto_scan?'AÇIK':'KAPALI';
 $('markets').innerHTML=d.markets.map(m=>{const q=d.quotes[m.symbol]||{};return `<tr><td><b>${m.symbol}</b></td><td>${q.price==null?'—':Number(q.price).toFixed(m.digits)}</td><td class="${Number(q.change_pct)>=0?'green':'red'}">${q.change_pct==null?'—':Number(q.change_pct).toFixed(2)+'%'}</td><td><span class="badge ${m.status==='OK'?'buy':'neutral'}">${m.status==='OK'?'Aktif':safe(m.status)}</span><div class="muted">${m.message||''}</div></td><td>${fmtDate(m.updated_at)}</td></tr>`}).join('');
 $('positions').innerHTML=d.open_positions.length?d.open_positions.map(p=>`<tr><td><b>${p.symbol}</b></td><td><span class="badge ${p.side==='BUY'?'buy':'sell'}">${p.side}</span></td><td>${safe(p.entry)}</td><td>${safe(p.current_price)}</td><td>${Number(p.lot||0).toFixed(2)}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">Açık pozisyon bulunmuyor.</td></tr>';
-$('trades').innerHTML=d.trades.length?d.trades.map(t=>`<tr><td><b>${t.symbol}</b></td><td><span class="badge ${t.side==='BUY'?'buy':'sell'}">${t.side}</span></td><td>${safe(t.entry)}</td><td>${safe(t.exit)}</td><td class="${Number(t.pnl)>=0?'green':'red'}">${money(t.pnl)}</td><td>${fmtDate(t.closed_at)}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">Henüz kapanmış işlem kaydı yok.</td></tr>';draw(d.equity);}
+$('trades').innerHTML=d.trades.length?d.trades.map(t=>`<tr><td><b>${t.symbol}</b></td><td><span class="badge ${t.side==='BUY'?'buy':'sell'}">${t.side}</span></td><td>${safe(t.entry)}</td><td>${safe(t.exit)}</td><td class="${Number(t.pnl)>=0?'green':'red'}">${money(t.pnl)}</td><td>${fmtDate(t.closed_at)}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">Henüz kapanmış işlem kaydı yok.</td></tr>';
+$('signalRows').innerHTML=d.signals&&d.signals.length?d.signals.map(s=>`<tr><td>${fmtDate(s.sent_at)}</td><td><b>${safe(s.symbol)}</b></td><td><span class="badge ${s.action==='BUY'?'buy':'sell'}">${safe(s.action)}</span></td><td>${safe(s.price)}</td><td>${safe(s.sl)}</td><td>${safe(s.tp)}</td><td>${safe(s.score)}/5</td><td>${s.rr==null?'—':'1:'+Number(s.rr).toFixed(2)}</td></tr>`).join(''):'<tr><td colspan="8" class="empty">Henüz kaydedilmiş sinyal yok. Yeni Telegram sinyalleri gönderildikçe burada görünecek.</td></tr>';draw(d.equity);}
 catch(e){$('status').textContent='API bağlantı hatası';$('sideStatus').textContent='BAĞLANTI HATASI';console.error(e)}}
 load();loadCandles();setInterval(load,30000);setInterval(loadCandles,60000);window.addEventListener('resize',()=>{load();loadCandles()});
 </script></body></html>"""
@@ -6113,6 +6163,11 @@ def dashboard_data():
             health_rows = conn.execute("""
                 SELECT symbol, status, message, updated_at FROM market_health
             """).fetchall()
+            signal_rows = conn.execute("""
+                SELECT id, symbol, action, price, sl, tp, lot, score, rr,
+                       trend, rsi, adx, macd_hist, atr, bar_time, sent_at
+                FROM signal_history ORDER BY id DESC LIMIT 25
+            """).fetchall()
         finally:
             conn.close()
 
@@ -6138,6 +6193,12 @@ def dashboard_data():
         "exit": r[4], "pnl": r[5], "opened_at": r[6],
         "closed_at": r[7], "lot": r[8], "reason": r[9]
     } for r in trade_rows]
+    signals = [{
+        "id": r[0], "symbol": r[1], "action": r[2], "price": r[3],
+        "sl": r[4], "tp": r[5], "lot": r[6], "score": r[7], "rr": r[8],
+        "trend": r[9], "rsi": r[10], "adx": r[11], "macd_hist": r[12],
+        "atr": r[13], "bar_time": r[14], "sent_at": r[15]
+    } for r in signal_rows]
     equity, running = [], 0.0
     for row in reversed(trade_rows):
         running += float(row[5] or 0.0)
@@ -6151,7 +6212,7 @@ def dashboard_data():
         "open_positions": positions, "open_risk": risk,
         "stats": stats, "symbols": list(SYMBOL_CONFIG.keys()),
         "auto_scan": auto_scan, "markets": markets, "trades": trades,
-        "equity": equity
+        "signals": signals, "equity": equity
     })
 
 
@@ -6234,6 +6295,62 @@ def dashboard_candles():
         logger.warning("Dashboard candle error %s: %s", symbol, exc)
         return jsonify({"symbol": symbol, "interval": interval, "candles": [],
                         "message": "Mum verisi geçici olarak alınamadı."}), 502
+
+
+@app.route("/api/signals")
+def dashboard_signals():
+    """Read-only signal journal; bounded result count."""
+    try:
+        limit = max(1, min(int(request.args.get("limit", "50")), 200))
+    except (TypeError, ValueError):
+        return jsonify({"error": "limit sayısal olmalı"}), 400
+
+    with DB_LOCK:
+        conn = db_connect()
+        try:
+            rows = conn.execute("""
+                SELECT id, symbol, action, price, sl, tp, lot, score, rr,
+                       trend, rsi, adx, macd_hist, atr, bar_time, sent_at
+                FROM signal_history ORDER BY id DESC LIMIT ?
+            """, (limit,)).fetchall()
+        finally:
+            conn.close()
+
+    fields = ("id", "symbol", "action", "price", "sl", "tp", "lot", "score",
+              "rr", "trend", "rsi", "adx", "macd_hist", "atr", "bar_time", "sent_at")
+    return jsonify({"signals": [dict(zip(fields, row)) for row in rows]})
+
+
+@app.route("/api/backtest")
+def dashboard_backtest():
+    """Explicit, on-demand historical backtest; does not place orders."""
+    symbol = request.args.get("symbol", "").upper()
+    period = request.args.get("period", "30d")
+    allowed_periods = {"5d", "1mo", "3mo", "6mo", "1y"}
+    if symbol not in SYMBOL_CONFIG:
+        return jsonify({"ok": False, "message": "Geçersiz sembol."}), 400
+    if period not in allowed_periods:
+        return jsonify({"ok": False, "message": "Desteklenmeyen backtest dönemi."}), 400
+    try:
+        return jsonify(run_backtest(symbol, period=period))
+    except Exception:
+        logger.exception("Dashboard backtest hatası: %s", symbol)
+        return jsonify({"ok": False, "message": "Backtest sırasında hata oluştu."}), 500
+
+
+@app.route("/api/strategy")
+def dashboard_strategy():
+    """Read-only strategy configuration summary."""
+    return jsonify({
+        "main_timeframe": MAIN_TIMEFRAME,
+        "higher_timeframe": HIGHER_TIMEFRAME,
+        "symbols": list(SYMBOL_CONFIG.keys()),
+        "ema_fast": EMA_FAST,
+        "ema_slow": EMA_SLOW,
+        "simulation_mode": SIMULATION_MODE,
+        "real_orders_enabled": False,
+        "signal_note": "Teknik gösterge tabanlı analiz; AI modeli olarak sunulmaz."
+    })
 
 
 @app.route("/ping")
