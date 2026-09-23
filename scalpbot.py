@@ -6184,6 +6184,8 @@ def get_cached_quotes():
             logger.warning("Dashboard quote error %s: %s", symbol, exc)
             return symbol, None
 
+    # Build a fresh result map for this cache refresh.
+    quotes = {}
     with ThreadPoolExecutor(max_workers=6) as pool:
         for symbol, quote in pool.map(fetch_quote, SYMBOL_CONFIG.items()):
             if quote is not None:
