@@ -119,6 +119,15 @@ if not logger_strategy.handlers:
 
 app = Flask(__name__)
 
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({
+        "status": "ok",
+        "app": APP_NAME,
+        "version": VERSION,
+        "simulation_mode": SIMULATION_MODE,
+        "time": now_istanbul().isoformat()
+    }), 200
 
 # ============================================================
 # DATABASE
