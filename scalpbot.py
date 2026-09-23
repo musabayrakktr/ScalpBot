@@ -40,6 +40,7 @@ import sqlite3
 import logging
 import threading
 import datetime as dt
+from concurrent.futures import ThreadPoolExecutor
 
 from logging.handlers import RotatingFileHandler
 from zoneinfo import ZoneInfo
@@ -49,7 +50,7 @@ import pandas as pd
 import requests
 import yfinance as yf
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 
 
 # ============================================================
@@ -6049,6 +6050,7 @@ DASHBOARD_HTML = r"""<!doctype html>
 <style>
 :root{--bg:#06101f;--panel:#0b1a2e;--panel2:#0d2038;--line:#183451;--text:#e7f0ff;--muted:#8ca6c4;--blue:#168cff;--green:#00d6a0;--red:#ff526d;--purple:#a17aff;--gold:#ffc857}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 65% -20%,#102d50 0,transparent 48%),var(--bg);color:var(--text);font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}button{font:inherit}.layout{display:grid;grid-template-columns:220px 1fr;min-height:100vh}.side{background:#061326;border-right:1px solid var(--line);padding:22px 14px;display:flex;flex-direction:column;gap:25px}.brand{display:flex;align-items:center;gap:10px;padding:0 8px}.logo{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,#1aa6ff,#7755ff);display:grid;place-items:center;font-weight:900;font-size:23px}.brand b{font-size:17px;letter-spacing:1.2px}.brand small{display:block;color:var(--muted);font-size:9px;letter-spacing:1.5px}.nav{display:grid;gap:7px}.nav a{padding:12px 13px;border-radius:10px;color:#b7c9df;text-decoration:none;display:flex;gap:12px;align-items:center}.nav a.active,.nav a:hover{background:linear-gradient(90deg,#114a83,#0c2a4a);color:white;box-shadow:inset 3px 0 #2da4ff}.sidebox{margin-top:auto;border:1px solid var(--line);border-radius:13px;padding:15px;background:#091a2c}.dot{display:inline-block;width:8px;height:8px;background:var(--green);border-radius:50%;box-shadow:0 0 12px var(--green);margin-right:8px}.muted{color:var(--muted)}main{min-width:0;padding:22px 25px 35px}.top{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:23px}.top h1{font-size:23px;margin:0}.top p{margin:4px 0 0;color:var(--muted)}.topright{display:flex;align-items:center;gap:12px}.pill{border:1px solid var(--line);background:#0a1c31;border-radius:20px;padding:9px 13px;color:#c8d9ed}.pill strong{color:var(--green)}.grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}.card{background:linear-gradient(145deg,rgba(13,32,56,.98),rgba(8,23,41,.98));border:1px solid var(--line);border-radius:14px;padding:17px;min-width:0;box-shadow:0 8px 25px #0002}.metric{display:flex;align-items:center;gap:12px}.ico{width:43px;height:43px;border-radius:13px;background:#0b3155;color:#35a9ff;display:grid;place-items:center;font-size:21px}.metric label{display:block;color:var(--muted);font-size:12px}.metric strong{display:block;font-size:23px;margin-top:4px;letter-spacing:-.5px}.metric small{color:var(--muted)}.green{color:var(--green)!important}.red{color:var(--red)!important}.blue{color:#40b5ff!important}.purple{color:var(--purple)!important}.sectiongrid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,1fr);gap:15px;margin-top:16px}.cardhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;gap:12px}.cardhead h2{font-size:16px;margin:0}.tag{font-size:11px;color:#8bcaff;border:1px solid #1b507b;background:#0a2b49;padding:5px 9px;border-radius:8px}.chartwrap{height:270px;position:relative}.chartwrap canvas{width:100%;height:100%;display:block}.market-table,.trades{width:100%;border-collapse:collapse;white-space:nowrap}.market-table th,.market-table td,.trades th,.trades td{text-align:left;padding:11px 8px;border-bottom:1px solid #142d47}.market-table th,.trades th{color:var(--muted);font-weight:500;font-size:11px}.market-table td,.trades td{font-size:12px}.market-table tr:last-child td,.trades tr:last-child td{border-bottom:0}.badge{display:inline-block;padding:4px 8px;border-radius:6px;font-size:10px;font-weight:700}.buy{background:#063e39;color:#42e5b7}.sell{background:#4a1c2b;color:#ff7890}.neutral{background:#26354a;color:#b7c9df}.scroll{overflow:auto}.twocol{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:16px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.stat{border-right:1px solid var(--line);padding:4px 9px}.stat:last-child{border:0}.stat label{display:block;color:var(--muted);font-size:11px}.stat strong{display:block;font-size:20px;margin-top:7px}.empty{padding:22px;text-align:center;color:var(--muted)}.foot{display:flex;justify-content:space-between;gap:10px;color:#66829f;font-size:11px;margin:20px 2px 0}.mobilemenu{display:none}
+.tag{cursor:pointer}select.tag{color:#bfe1ff;outline:none}.chartwrap{overflow:hidden}
 @media(max-width:1150px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.sectiongrid{grid-template-columns:1fr}.twocol{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.layout{grid-template-columns:1fr}.side{display:none}main{padding:17px 12px 25px}.top{align-items:flex-start}.top h1{font-size:20px}.topright .pill:first-child{display:none}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.card{padding:13px}.metric strong{font-size:19px}.ico{width:36px;height:36px}.twocol{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.stat:nth-child(2){border:0}.chartwrap{height:220px}.cardhead h2{font-size:15px}}
 @media(max-width:390px){.grid{grid-template-columns:1fr 1fr}.metric{gap:8px}.metric strong{font-size:17px}}
@@ -6058,8 +6060,9 @@ DASHBOARD_HTML = r"""<!doctype html>
 <div class="sidebox"><div class="muted">BOT DURUMU</div><h3 style="margin:9px 0;color:var(--green)"><span class="dot"></span><span id="sideStatus">Kontrol ediliyor</span></h3><div class="muted" style="font-size:12px">Sinyal botu · Demo kayıtları</div><hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><div class="muted">Sürüm</div><b id="version">—</b><div class="muted" style="margin-top:10px">Sunucu</div><b>Render / Flask</b></div>
 </aside><main id="home"><header class="top"><div><h1>Trading Dashboard <span class="tag">V4.6</span></h1><p>SCALPBOT PRO · Hesap ve piyasa görünümü</p></div><div class="topright"><div class="pill"><span class="dot"></span><strong id="status">Bağlanıyor</strong></div><div class="pill" id="updated">Güncelleme bekleniyor</div></div></header>
 <section class="grid"><div class="card metric"><div class="ico">▣</div><div><label>Demo Bakiye</label><strong id="balance">—</strong><small>USD · Simülasyon</small></div></div><div class="card metric"><div class="ico" style="color:var(--green)">↗</div><div><label>Bugünkü P&amp;L</label><strong id="today">—</strong><small>Kapalı demo işlemler</small></div></div><div class="card metric"><div class="ico" style="color:var(--purple)">◉</div><div><label>Toplam İşlem</label><strong id="count">—</strong><small>Kaydedilmiş kapanışlar</small></div></div><div class="card metric"><div class="ico" style="color:var(--gold)">◎</div><div><label>Kazanma Oranı</label><strong id="winrate">—</strong><small id="winloss">Kayıtlı sonuçlar</small></div></div><div class="card metric"><div class="ico">⌘</div><div><label>Açık Pozisyon</label><strong id="open">—</strong><small id="risk">Açık risk: —</small></div></div></section>
+<section class="card" id="livechart" style="margin-top:16px"><div class="cardhead"><h2>🕯️ Canlı Mum Grafiği</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="chartSymbol" class="tag" aria-label="Sembol seçimi"><option value="EURUSD">EURUSD</option><option value="GBPUSD">GBPUSD</option><option value="USDJPY">USDJPY</option><option value="USDCAD">USDCAD</option><option value="USDCHF">USDCHF</option><option value="XAUUSD" selected>XAUUSD</option></select><select id="chartInterval" class="tag" aria-label="Zaman dilimi"><option value="5m">M5</option><option value="15m">M15</option><option value="1h">H1</option><option value="4h">H4</option><option value="1d">D1</option></select><span class="tag" id="chartInfo">Yahoo Finance · fiyatlar gecikmeli olabilir</span></div></div><div class="chartwrap" style="height:330px"><canvas id="candleChart"></canvas></div><div class="muted" id="chartStatus" style="font-size:11px">Grafik yükleniyor…</div></section>
 <div class="sectiongrid"><section class="card" id="performance"><div class="cardhead"><h2>📈 Kâr / Zarar Eğrisi</h2><span class="tag">Gerçekleşmiş demo P&amp;L</span></div><div class="chartwrap"><canvas id="pnlChart"></canvas></div><div class="stats"><div class="stat"><label>Net P&amp;L</label><strong id="netpnl">—</strong></div><div class="stat"><label>Profit Factor</label><strong id="pf">—</strong></div><div class="stat"><label>Ort. Kazanç</label><strong id="avgwin">—</strong></div><div class="stat"><label>Max. Drawdown</label><strong id="dd">—</strong></div></div></section>
-<section class="card" id="market"><div class="cardhead"><h2>🌐 Piyasa Takibi</h2><span class="tag">Bot sembolleri</span></div><div class="scroll"><table class="market-table"><thead><tr><th>Sembol</th><th>Durum</th><th>Son güncelleme</th></tr></thead><tbody id="markets"><tr><td colspan="3" class="empty">Piyasa bilgileri yükleniyor…</td></tr></tbody></table></div><p class="muted" style="font-size:11px;margin:12px 0 0">Fiyat alanı, bot tarafından ayrıca kaydedilmediği için burada uydurma fiyat gösterilmez.</p></section></div>
+<section class="card" id="market"><div class="cardhead"><h2>🌐 Piyasa Takibi</h2><span class="tag">Bot sembolleri</span></div><div class="scroll"><table class="market-table"><thead><tr><th>Sembol</th><th>Fiyat</th><th>Günlük %</th><th>Durum</th><th>Son güncelleme</th></tr></thead><tbody id="markets"><tr><td colspan="5" class="empty">Piyasa bilgileri yükleniyor…</td></tr></tbody></table></div><p class="muted" style="font-size:11px;margin:12px 0 0">Fiyatlar Yahoo Finance verisinden gelir; sağlayıcı gecikmeleri olabilir.</p></section></div>
 <div class="twocol"><section class="card" id="signals"><div class="cardhead"><h2>🎯 Sinyal / Strateji Durumu</h2><span class="tag">Canlı sinyal üretimi tetiklenmez</span></div><p class="muted">Bu sürümde geçmiş sinyaller veritabanına kaydedilmediğinden, panel sinyal geçmişi uydurmaz. Botun Telegram üzerinden gönderdiği sinyaller mevcut akışında devam eder.</p><div class="stats"><div class="stat"><label>Takip edilen sembol</label><strong id="symbolcount">—</strong></div><div class="stat"><label>Tarama ayarı</label><strong id="autoscan">—</strong></div></div></section>
 <section class="card"><div class="cardhead"><h2>📂 Açık Pozisyonlar</h2><span class="tag">Manuel demo takibi</span></div><div class="scroll"><table class="trades"><thead><tr><th>Sembol</th><th>Yön</th><th>Giriş</th><th>Güncel</th><th>Lot</th></tr></thead><tbody id="positions"><tr><td colspan="5" class="empty">Yükleniyor…</td></tr></tbody></table></div></section></div>
 <section class="card" id="history" style="margin-top:16px"><div class="cardhead"><h2>🧾 Son Kapanan İşlemler</h2><span class="tag">En yeni 10 kayıt</span></div><div class="scroll"><table class="trades"><thead><tr><th>Sembol</th><th>Yön</th><th>Giriş</th><th>Çıkış</th><th>P&amp;L</th><th>Kapanış</th></tr></thead><tbody id="trades"><tr><td colspan="6" class="empty">İşlem geçmişi yükleniyor…</td></tr></tbody></table></div></section>
@@ -6069,12 +6072,15 @@ const $=id=>document.getElementById(id); const money=n=>Number(n||0).toLocaleStr
 const safe=v=>(v===null||v===undefined||v===''?'—':v); const fmtDate=s=>{if(!s)return '—';try{return new Date(s).toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}catch(e){return s}};
 function pnl(el,n){$(el).textContent=money(n);$(el).className=Number(n)>=0?'green':'red'}
 function draw(values){const c=$('pnlChart'),ctx=c.getContext('2d'),rect=c.getBoundingClientRect(),dpr=window.devicePixelRatio||1;c.width=rect.width*dpr;c.height=rect.height*dpr;ctx.scale(dpr,dpr);const w=rect.width,h=rect.height,pad=26;ctx.clearRect(0,0,w,h);const vals=values.length?values:[0];let running=0;const line=vals.map(x=>(running+=Number(x||0)));const min=Math.min(0,...line),max=Math.max(0,...line),range=max-min||1;ctx.strokeStyle='#18334e';ctx.lineWidth=1;for(let i=0;i<5;i++){let y=pad+(h-2*pad)*i/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-8,y);ctx.stroke()}const points=line.map((v,i)=>({x:pad+(w-pad-12)*(line.length===1?.5:i/(line.length-1)),y:h-pad-(v-min)/range*(h-2*pad)}));if(points.length>1){ctx.beginPath();points.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.strokeStyle='#16c99a';ctx.lineWidth=2.5;ctx.stroke();ctx.lineTo(points.at(-1).x,h-pad);ctx.lineTo(points[0].x,h-pad);ctx.closePath();const grad=ctx.createLinearGradient(0,pad,0,h);grad.addColorStop(0,'rgba(0,214,160,.20)');grad.addColorStop(1,'rgba(0,214,160,0)');ctx.fillStyle=grad;ctx.fill()}ctx.fillStyle='#8ca6c4';ctx.font='11px system-ui';ctx.fillText(money(max),pad,13);ctx.fillText(money(min),pad,h-5);}
+function drawCandles(items){const c=$('candleChart'),ctx=c.getContext('2d'),r=c.getBoundingClientRect(),dpr=window.devicePixelRatio||1;c.width=Math.max(1,r.width*dpr);c.height=Math.max(1,r.height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);const w=r.width,h=r.height;ctx.clearRect(0,0,w,h);if(!items.length){ctx.fillStyle='#8ca6c4';ctx.fillText('Mum verisi şu anda bulunamadı.',16,28);return}const pad={l:12,r:64,t:12,b:22},plotW=w-pad.l-pad.r,plotH=h-pad.t-pad.b;let lo=Math.min(...items.map(x=>x.low)),hi=Math.max(...items.map(x=>x.high));if(hi===lo){hi+=1;lo-=1}const y=v=>pad.t+(hi-v)/(hi-lo)*plotH;ctx.font='10px system-ui';ctx.strokeStyle='#18334e';ctx.fillStyle='#8ca6c4';for(let i=0;i<=4;i++){const yy=pad.t+plotH*i/4,val=hi-(hi-lo)*i/4;ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(w-pad.r+5,yy);ctx.stroke();ctx.fillText(val.toFixed(3),w-pad.r+9,yy+3)}const step=plotW/items.length,cw=Math.max(2,step*.58);items.forEach((v,i)=>{const x=pad.l+i*step+step/2,up=v.close>=v.open;ctx.strokeStyle=up?'#00d6a0':'#ff526d';ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.moveTo(x,y(v.high));ctx.lineTo(x,y(v.low));ctx.stroke();const top=y(Math.max(v.open,v.close)),bottom=y(Math.min(v.open,v.close));ctx.fillRect(x-cw/2,top,cw,Math.max(1,bottom-top))});}
+async function loadCandles(){const symbol=$('chartSymbol').value,interval=$('chartInterval').value;$('chartStatus').textContent=`${symbol} · ${interval.toUpperCase()} mumları yükleniyor…`;try{const res=await fetch(`/api/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`,{cache:'no-store'});const d=await res.json();drawCandles(d.candles||[]);$('chartStatus').textContent=d.candles&&d.candles.length?`${symbol} · ${d.candles.length} mum · Yahoo Finance verisi (gecikmeli olabilir)`:d.message||'Mum verisi bulunamadı.'}catch(e){$('chartStatus').textContent='Grafik verisi alınamadı.';drawCandles([])}}
+$('chartSymbol').addEventListener('change',loadCandles);$('chartInterval').addEventListener('change',loadCandles);
 async function load(){try{const r=await fetch('/api/dashboard',{cache:'no-store'});if(!r.ok)throw Error('API '+r.status);const d=await r.json();$('status').textContent=d.status==='online'?'Bot Servisi Çevrimiçi':'Servis Durumu';$('sideStatus').textContent=d.status==='online'?'ÇALIŞIYOR':'KONTROL';$('version').textContent=d.version;$('updated').textContent='Son güncelleme: '+fmtDate(d.time);$('balance').textContent=money(d.balance);pnl('today',d.today_pnl);$('count').textContent=d.stats.count;$('winrate').textContent=Number(d.stats.win_rate).toFixed(1)+'%';$('winloss').textContent=d.stats.wins+' kazanç · '+d.stats.losses+' kayıp';$('open').textContent=d.open_positions.length;$('risk').textContent='Açık risk: '+money(d.open_risk);pnl('netpnl',d.stats.total_pnl);$('pf').textContent=d.stats.profit_factor===null?'—':Number(d.stats.profit_factor).toFixed(2);$('avgwin').textContent=money(d.stats.average_win);pnl('dd',-Math.abs(d.stats.max_drawdown));$('symbolcount').textContent=d.symbols.length;$('autoscan').textContent=d.auto_scan?'AÇIK':'KAPALI';
-$('markets').innerHTML=d.markets.map(m=>`<tr><td><b>${m.symbol}</b></td><td><span class="badge ${m.status==='OK'?'buy':'neutral'}">${m.status==='OK'?'Aktif':safe(m.status)}</span><div class="muted">${m.message||''}</div></td><td>${fmtDate(m.updated_at)}</td></tr>`).join('');
+$('markets').innerHTML=d.markets.map(m=>{const q=d.quotes[m.symbol]||{};return `<tr><td><b>${m.symbol}</b></td><td>${q.price==null?'—':Number(q.price).toFixed(m.digits)}</td><td class="${Number(q.change_pct)>=0?'green':'red'}">${q.change_pct==null?'—':Number(q.change_pct).toFixed(2)+'%'}</td><td><span class="badge ${m.status==='OK'?'buy':'neutral'}">${m.status==='OK'?'Aktif':safe(m.status)}</span><div class="muted">${m.message||''}</div></td><td>${fmtDate(m.updated_at)}</td></tr>`}).join('');
 $('positions').innerHTML=d.open_positions.length?d.open_positions.map(p=>`<tr><td><b>${p.symbol}</b></td><td><span class="badge ${p.side==='BUY'?'buy':'sell'}">${p.side}</span></td><td>${safe(p.entry)}</td><td>${safe(p.current_price)}</td><td>${Number(p.lot||0).toFixed(2)}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">Açık pozisyon bulunmuyor.</td></tr>';
 $('trades').innerHTML=d.trades.length?d.trades.map(t=>`<tr><td><b>${t.symbol}</b></td><td><span class="badge ${t.side==='BUY'?'buy':'sell'}">${t.side}</span></td><td>${safe(t.entry)}</td><td>${safe(t.exit)}</td><td class="${Number(t.pnl)>=0?'green':'red'}">${money(t.pnl)}</td><td>${fmtDate(t.closed_at)}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">Henüz kapanmış işlem kaydı yok.</td></tr>';draw(d.equity);}
 catch(e){$('status').textContent='API bağlantı hatası';$('sideStatus').textContent='BAĞLANTI HATASI';console.error(e)}}
-load();setInterval(load,30000);window.addEventListener('resize',()=>load());
+load();loadCandles();setInterval(load,30000);setInterval(loadCandles,60000);window.addEventListener('resize',()=>{load();loadCandles()});
 </script></body></html>"""
 
 
@@ -6116,6 +6122,7 @@ def dashboard_data():
         item = health.get(symbol, {})
         markets.append({
             "symbol": symbol,
+            "digits": SYMBOL_CONFIG[symbol].get("digits", 5),
             "status": item.get("status", "—"),
             "message": item.get("message", "Henüz durum kaydı yok"),
             "updated_at": item.get("updated_at")
@@ -6137,6 +6144,7 @@ def dashboard_data():
         equity.append(running)
 
     return jsonify({
+        "quotes": get_cached_quotes(),
         "app": APP_NAME, "version": VERSION, "status": "online",
         "simulation_mode": SIMULATION_MODE, "time": now_istanbul().isoformat(),
         "balance": balance, "today_pnl": get_today_pnl(),
@@ -6145,6 +6153,85 @@ def dashboard_data():
         "auto_scan": auto_scan, "markets": markets, "trades": trades,
         "equity": equity
     })
+
+
+# Dashboard-only market cache. These endpoints are read-only and do not trigger signals.
+_QUOTE_CACHE = {"at": 0.0, "data": {}}
+_QUOTE_LOCK = threading.Lock()
+
+
+def get_cached_quotes():
+    now = time.time()
+    with _QUOTE_LOCK:
+        if now - _QUOTE_CACHE["at"] < 25 and _QUOTE_CACHE["data"]:
+            return dict(_QUOTE_CACHE["data"])
+    def fetch_quote(pair):
+        symbol, cfg = pair
+        try:
+            raw = yf.download(cfg["yf"], period="5d", interval="1d", progress=False,
+                              auto_adjust=False, threads=False, timeout=8)
+            if raw is None or raw.empty:
+                return symbol, None
+            if isinstance(raw.columns, pd.MultiIndex):
+                raw.columns = raw.columns.get_level_values(0)
+            closes = pd.to_numeric(raw.get("Close"), errors="coerce").dropna()
+            if closes.empty:
+                return symbol, None
+            price = float(closes.iloc[-1])
+            previous = float(closes.iloc[-2]) if len(closes) > 1 else price
+            return symbol, {"price": price, "change_pct": ((price / previous) - 1) * 100 if previous else 0.0}
+        except Exception as exc:
+            logger.warning("Dashboard quote error %s: %s", symbol, exc)
+            return symbol, None
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for symbol, quote in pool.map(fetch_quote, SYMBOL_CONFIG.items()):
+            if quote is not None:
+                quotes[symbol] = quote
+    with _QUOTE_LOCK:
+        _QUOTE_CACHE["at"] = time.time()
+        _QUOTE_CACHE["data"] = quotes
+    return dict(quotes)
+
+
+@app.route("/api/candles")
+def dashboard_candles():
+    symbol = request.args.get("symbol", "XAUUSD").upper()
+    interval = request.args.get("interval", "5m")
+    allowed = {"5m": ("5m", "5d"), "15m": ("15m", "5d"),
+               "1h": ("1h", "1mo"), "4h": ("1h", "3mo"), "1d": ("1d", "6mo")}
+    if symbol not in SYMBOL_CONFIG:
+        return jsonify({"error": "Geçersiz sembol"}), 400
+    if interval not in allowed:
+        return jsonify({"error": "Geçersiz zaman dilimi"}), 400
+    yf_interval, period = allowed[interval]
+    try:
+        df = yf.download(SYMBOL_CONFIG[symbol]["yf"], interval=yf_interval, period=period,
+                         progress=False, auto_adjust=False, threads=False, timeout=12)
+        if df is None or df.empty:
+            return jsonify({"symbol": symbol, "interval": interval, "candles": [],
+                            "message": "Veri sağlayıcıdan mum verisi alınamadı."})
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        if interval == "4h":
+            df = df.resample("4h").agg({"Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum"}).dropna(subset=["Open", "High", "Low", "Close"])
+        candles = []
+        for idx, row in df.tail(120).iterrows():
+            try:
+                values = [float(row[k]) for k in ("Open", "High", "Low", "Close")]
+                if not all(np.isfinite(v) for v in values):
+                    continue
+                stamp = idx.to_pydatetime().isoformat() if hasattr(idx, "to_pydatetime") else str(idx)
+                candles.append({"time": stamp, "open": values[0], "high": values[1],
+                                "low": values[2], "close": values[3]})
+            except Exception:
+                continue
+        return jsonify({"symbol": symbol, "interval": interval, "candles": candles,
+                        "source": "Yahoo Finance", "delayed_possible": True})
+    except Exception as exc:
+        logger.warning("Dashboard candle error %s: %s", symbol, exc)
+        return jsonify({"symbol": symbol, "interval": interval, "candles": [],
+                        "message": "Mum verisi geçici olarak alınamadı."}), 502
 
 
 @app.route("/ping")
