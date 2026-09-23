@@ -340,6 +340,7 @@ def get_open_position_stats():
     with DB_LOCK:
         conn = db_connect()
         cur = conn.cursor()
+
         cur.execute("""
             SELECT
                 COUNT(*),
@@ -347,13 +348,15 @@ def get_open_position_stats():
             FROM positions
             WHERE status = 'OPEN'
         """)
+
         row = cur.fetchone()
         conn.close()
 
-    cnt = int(row[0]) if row and row[0] is not None else 0
-    total_open_risk = float(row) if row and len(row) > 1 and row is not None else 0.0
-    return cnt, total_open_risk
+    if not row:
+        return 0, 0.0
 
+    cnt = int(row[0]) if row and row[0] is not None else 0
+total_open_risk = float(row[1]) if row and len(row) > 1 and row[1] is not None else 0.0
 
 def atomic_add_position_safely(
     symbol, side, entry, sl, tp, risk
