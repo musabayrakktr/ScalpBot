@@ -59,7 +59,7 @@ from flask import Flask, jsonify, request
 
 APP_NAME = "ScalpBot Pro"
 
-VERSION = "5.2-LIVE-MOTION"
+VERSION = "5.3-AI-ANALYSIS"
 
 SIMULATION_MODE = True
 
@@ -6103,6 +6103,7 @@ DASHBOARD_HTML = r"""<!doctype html>
 @media(max-width:1150px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.sectiongrid{grid-template-columns:1fr}.twocol{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.layout{grid-template-columns:1fr}.side{display:none}main{padding:17px 12px 25px}.top{align-items:flex-start}.top h1{font-size:20px}.topright .pill:first-child{display:none}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.card{padding:13px}.metric strong{font-size:19px}.ico{width:36px;height:36px}.twocol{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.stat:nth-child(2){border:0}.chartwrap{height:220px}.cardhead h2{font-size:15px}}
 @media(max-width:390px){.grid{grid-template-columns:1fr 1fr}.metric{gap:8px}.metric strong{font-size:17px}}
+.ai-panel{border-color:#20517a;background:linear-gradient(135deg,rgba(12,34,59,.99),rgba(7,22,40,.99))}.ai-summary{display:grid;grid-template-columns:190px 1fr;gap:18px;align-items:center}.ai-gauge{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;padding:10px}.ai-ring{width:116px;height:116px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(#00d6a0 0deg,#183451 0deg);position:relative;transition:background .5s ease}.ai-ring:before{content:"";position:absolute;inset:9px;background:#0a1b30;border-radius:50%}.ai-ring>div{z-index:1;display:flex;flex-direction:column}.ai-ring strong{font-size:26px}.ai-ring small{font-size:10px;color:var(--muted)}.ai-readings{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.ai-readings>div{border:1px solid var(--line);border-radius:10px;padding:13px;background:#081a2d}.ai-readings label,.ai-readings small{display:block;color:var(--muted);font-size:11px}.ai-readings strong{display:block;font-size:18px;margin:7px 0}.ai-explanation{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}.ai-explanation h3{font-size:14px;margin:0 0 8px}.ai-explanation ul{margin:0;padding-left:20px;color:#c2d5e9}.ai-explanation li{margin:5px 0}.ai-disclaimer{margin-top:12px;padding:10px;border-radius:8px;background:#10253a;color:#8da9c5;font-size:11px}@media(max-width:760px){.ai-summary{grid-template-columns:1fr}.ai-readings{grid-template-columns:repeat(2,minmax(0,1fr))}.ai-gauge{padding:5px}}
 /* v5.1 responsive polish + restrained motion */
 html{scroll-behavior:smooth;scroll-padding-top:18px}
 .card{transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease;animation:cardIn .55s both}
@@ -6134,13 +6135,14 @@ html{scroll-behavior:smooth;scroll-padding-top:18px}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
 </style></head><body><div class="layout">
 <aside class="side"><div class="brand"><div class="logo">S</div><div><b>SCALPBOT PRO</b><small>AI TRADING TERMINAL</small></div></div>
-<nav class="nav"><a class="active" href="#home">⌂　Ana Sayfa</a><a href="#market">▥　Piyasa Takibi</a><a href="#signals">◉　Sinyaller</a><a href="#history">◴　İşlem Geçmişi</a><a href="#performance">▤　Performans</a><a href="#analysis">✧　Strateji Analizi</a></nav>
+<nav class="nav"><a class="active" href="#home">⌂　Ana Sayfa</a><a href="#market">▥　Piyasa Takibi</a><a href="#signals">◉　Sinyaller</a><a href="#history">◴　İşlem Geçmişi</a><a href="#performance">▤　Performans</a><a href="#analysis">✧　Strateji Analizi</a><a href="#ai-center">🧠　AI Analiz Merkezi</a></nav>
 <div class="sidebox"><div class="muted">BOT DURUMU</div><h3 style="margin:9px 0;color:var(--green)"><span class="dot"></span><span id="sideStatus">Kontrol ediliyor</span></h3><div class="muted" style="font-size:12px">Sinyal botu · Demo kayıtları</div><hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><div class="muted">Sürüm</div><b id="version">—</b><div class="muted" style="margin-top:10px">Sunucu</div><b>Render / Flask</b></div>
-</aside><main id="home"><header class="top"><div><h1>Trading Dashboard <span class="tag">V5.2</span></h1><p>SCALPBOT PRO · Hesap ve piyasa görünümü</p></div><div class="topright"><div class="pill"><span class="dot"></span><strong id="status">Bağlanıyor</strong></div><div class="pill" id="updated">Güncelleme bekleniyor</div></div></header>
+</aside><main id="home"><header class="top"><div><h1>Trading Dashboard <span class="tag">V5.3</span></h1><p>SCALPBOT PRO · Hesap ve piyasa görünümü</p></div><div class="topright"><div class="pill"><span class="dot"></span><strong id="status">Bağlanıyor</strong></div><div class="pill" id="updated">Güncelleme bekleniyor</div></div></header>
 <section class="grid"><div class="card metric"><div class="ico">▣</div><div><label>Demo Bakiye</label><strong id="balance">—</strong><small>USD · Simülasyon</small></div></div><div class="card metric"><div class="ico" style="color:var(--green)">↗</div><div><label>Bugünkü P&amp;L</label><strong id="today">—</strong><small>Kapalı demo işlemler</small></div></div><div class="card metric"><div class="ico" style="color:var(--purple)">◉</div><div><label>Toplam İşlem</label><strong id="count">—</strong><small>Kaydedilmiş kapanışlar</small></div></div><div class="card metric"><div class="ico" style="color:var(--gold)">◎</div><div><label>Kazanma Oranı</label><strong id="winrate">—</strong><small id="winloss">Kayıtlı sonuçlar</small></div></div><div class="card metric"><div class="ico">⌘</div><div><label>Açık Pozisyon</label><strong id="open">—</strong><small id="risk">Açık risk: —</small></div></div></section>
 <section class="card" id="livechart" style="margin-top:16px"><div class="cardhead"><h2>🕯️ Canlı Mum Grafiği</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="chartSymbol" class="tag" aria-label="Sembol seçimi"><option value="EURUSD">EURUSD</option><option value="GBPUSD">GBPUSD</option><option value="USDJPY">USDJPY</option><option value="USDCAD">USDCAD</option><option value="USDCHF">USDCHF</option><option value="XAUUSD" selected>XAUUSD</option></select><select id="chartInterval" class="tag" aria-label="Zaman dilimi"><option value="5m">M5</option><option value="15m">M15</option><option value="1h">H1</option><option value="4h">H4</option><option value="1d">D1</option></select><span class="tag" id="chartInfo">Yahoo Finance · fiyatlar gecikmeli olabilir</span></div></div><div class="chartwrap" style="height:330px"><canvas id="candleChart"></canvas></div><div class="muted" id="chartStatus" style="font-size:11px">Grafik yükleniyor…</div></section>
 <div class="sectiongrid"><section class="card" id="performance"><div class="cardhead"><h2>📈 Kâr / Zarar Eğrisi</h2><span class="tag">Gerçekleşmiş demo P&amp;L</span></div><div class="chartwrap"><canvas id="pnlChart"></canvas></div><div class="stats"><div class="stat"><label>Net P&amp;L</label><strong id="netpnl">—</strong></div><div class="stat"><label>Profit Factor</label><strong id="pf">—</strong></div><div class="stat"><label>Ort. Kazanç</label><strong id="avgwin">—</strong></div><div class="stat"><label>Max. Drawdown</label><strong id="dd">—</strong></div></div></section>
 <section class="card" id="market"><div class="cardhead"><h2>🌐 Piyasa Takibi</h2><span class="tag">Bot sembolleri</span></div><div class="scroll"><table class="market-table"><thead><tr><th>Sembol</th><th>Fiyat</th><th>Günlük %</th><th>Durum</th><th>Son güncelleme</th></tr></thead><tbody id="markets"><tr><td colspan="5" class="empty">Piyasa bilgileri yükleniyor…</td></tr></tbody></table></div><p class="muted" style="font-size:11px;margin:12px 0 0">Fiyatlar Yahoo Finance verisinden gelir; sağlayıcı gecikmeleri olabilir.</p></section></div>
+<section class="card ai-panel" id="ai-center" style="margin-top:16px"><div class="cardhead"><h2>🧠 AI Analiz Merkezi</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="aiSymbol" class="tag" aria-label="Analiz sembolü"><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option><option>USDCAD</option><option>USDCHF</option><option selected>XAUUSD</option></select><button id="aiRefresh" class="tag" type="button">⟳ Analizi yenile</button></div></div><p class="muted" id="aiStatus">Teknik göstergeler hesaplanıyor…</p><div class="ai-summary"><div class="ai-gauge"><div class="ai-ring" id="aiRing"><div><strong id="aiScore">—</strong><small>Yön skoru</small></div></div><b id="aiBias">Analiz bekleniyor</b><span class="muted" id="aiConfidence">Güven seviyesi: —</span></div><div class="ai-readings"><div><label>EMA 9 / 21</label><strong id="aiEma">—</strong><small id="aiEmaNote">—</small></div><div><label>RSI 14</label><strong id="aiRsi">—</strong><small id="aiRsiNote">—</small></div><div><label>MACD histogram</label><strong id="aiMacd">—</strong><small id="aiMacdNote">—</small></div><div><label>ADX 14</label><strong id="aiAdx">—</strong><small id="aiAdxNote">—</small></div></div></div><div class="ai-explanation"><h3>🔎 Analiz gerekçeleri</h3><ul id="aiReasons"><li>Veriler yükleniyor…</li></ul><div class="ai-disclaimer">ℹ️ Gösterge tabanlı teknik özet; gerçek bir yapay zekâ modeli veya kesin tahmin değildir. Veri sağlayıcı gecikmeli olabilir. İşlem emri oluşturmaz.</div></div></section>
 <div class="twocol"><section class="card" id="signals"><div class="cardhead"><h2>🎯 Sinyal / Strateji Durumu</h2><span class="tag">Canlı sinyal üretimi tetiklenmez</span></div><p class="muted">Telegram gönderimi başarılı olan sinyaller burada listelenir. Kayıtlar bu sürümden itibaren tutulur; önceki sinyaller geriye dönük oluşturulmaz.</p><div class="scroll"><table class="trades"><thead><tr><th>Zaman</th><th>Sembol</th><th>Yön</th><th>Entry</th><th>SL</th><th>TP</th><th>Skor</th><th>R:R</th></tr></thead><tbody id="signalRows"><tr><td colspan="8" class="empty">Sinyaller yükleniyor…</td></tr></tbody></table></div><div class="stats"><div class="stat"><label>Takip edilen sembol</label><strong id="symbolcount">—</strong></div><div class="stat"><label>Tarama ayarı</label><strong id="autoscan">—</strong></div></div></section>
 <section class="card"><div class="cardhead"><h2>📂 Açık Pozisyonlar</h2><span class="tag">Manuel demo takibi</span></div><div class="scroll"><table class="trades"><thead><tr><th>Sembol</th><th>Yön</th><th>Giriş</th><th>Güncel</th><th>Lot</th></tr></thead><tbody id="positions"><tr><td colspan="5" class="empty">Yükleniyor…</td></tr></tbody></table></div></section></div>
 <section class="card" id="history" style="margin-top:16px"><div class="cardhead"><h2>🧾 Son Kapanan İşlemler</h2><span class="tag">En yeni 10 kayıt</span></div><div class="scroll"><table class="trades"><thead><tr><th>Sembol</th><th>Yön</th><th>Giriş</th><th>Çıkış</th><th>P&amp;L</th><th>Kapanış</th></tr></thead><tbody id="trades"><tr><td colspan="6" class="empty">İşlem geçmişi yükleniyor…</td></tr></tbody></table></div></section>
@@ -6156,6 +6158,9 @@ function draw(values){const c=$('pnlChart'),ctx=c.getContext('2d'),rect=c.getBou
 function drawCandles(items){const c=$('candleChart'),ctx=c.getContext('2d'),r=c.getBoundingClientRect(),dpr=window.devicePixelRatio||1;c.width=Math.max(1,r.width*dpr);c.height=Math.max(1,r.height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);const w=r.width,h=r.height;ctx.clearRect(0,0,w,h);if(!items.length){ctx.fillStyle='#8ca6c4';ctx.fillText('Mum verisi şu anda bulunamadı.',16,28);return}const pad={l:12,r:64,t:12,b:22},plotW=w-pad.l-pad.r,plotH=h-pad.t-pad.b;let lo=Math.min(...items.map(x=>x.low)),hi=Math.max(...items.map(x=>x.high));if(hi===lo){hi+=1;lo-=1}const y=v=>pad.t+(hi-v)/(hi-lo)*plotH;ctx.font='10px system-ui';ctx.strokeStyle='#18334e';ctx.fillStyle='#8ca6c4';for(let i=0;i<=4;i++){const yy=pad.t+plotH*i/4,val=hi-(hi-lo)*i/4;ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(w-pad.r+5,yy);ctx.stroke();ctx.fillText(val.toFixed(3),w-pad.r+9,yy+3)}const step=plotW/items.length,cw=Math.max(2,step*.58);items.forEach((v,i)=>{const x=pad.l+i*step+step/2,up=v.close>=v.open;ctx.strokeStyle=up?'#00d6a0':'#ff526d';ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.moveTo(x,y(v.high));ctx.lineTo(x,y(v.low));ctx.stroke();const top=y(Math.max(v.open,v.close)),bottom=y(Math.min(v.open,v.close));ctx.fillRect(x-cw/2,top,cw,Math.max(1,bottom-top))});}
 async function loadCandles(){const symbol=$('chartSymbol').value,interval=$('chartInterval').value;$('chartStatus').textContent=`${symbol} · ${interval.toUpperCase()} mumları yükleniyor…`;try{const res=await fetch(`/api/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`,{cache:'no-store'});const d=await res.json();drawCandles(d.candles||[]);$('chartStatus').textContent=d.candles&&d.candles.length?`${symbol} · ${d.candles.length} mum · Yahoo Finance verisi (gecikmeli olabilir)`:d.message||'Mum verisi bulunamadı.'}catch(e){$('chartStatus').textContent='Grafik verisi alınamadı.';drawCandles([])}}
 $('chartSymbol').addEventListener('change',loadCandles);$('chartInterval').addEventListener('change',loadCandles);
+async function loadAiAnalysis(){const symbol=$('aiSymbol').value;$('aiStatus').textContent=`${symbol} için teknik göstergeler alınıyor…`;$('aiReasons').innerHTML='<li>Hesaplama sürüyor…</li>';try{const res=await fetch(`/api/ai-analysis?symbol=${encodeURIComponent(symbol)}`,{cache:'no-store'});const d=await res.json();if(!res.ok||!d.ok)throw Error(d.message||'Analiz alınamadı');$('aiScore').textContent=d.score;$('aiBias').textContent=d.bias;$('aiConfidence').textContent='Koşul uyumu: '+d.score+' / 100';$('aiRing').style.background=`conic-gradient(${d.score>=60?'#00d6a0':d.score<=40?'#ff526d':'#ffc857'} ${d.score*3.6}deg,#183451 0deg)`;$('aiEma').textContent=`${d.ema9} / ${d.ema21}`;$('aiEmaNote').textContent=d.ema_note;$('aiRsi').textContent=d.rsi;$('aiRsiNote').textContent=d.rsi_note;$('aiMacd').textContent=d.macd_hist;$('aiMacdNote').textContent=d.macd_note;$('aiAdx').textContent=d.adx;$('aiAdxNote').textContent=d.adx_note;$('aiReasons').innerHTML=d.reasons.map(x=>`<li>${safe(x)}</li>`).join('');$('aiStatus').textContent=`${symbol} · ${d.timeframe} · Son mum: ${fmtDate(d.updated_at)} · ${d.source}`}catch(e){$('aiStatus').textContent=e.message||'Analiz şu anda alınamadı.';$('aiReasons').innerHTML='<li>Veri sağlayıcıya ulaşılamadı. Biraz sonra tekrar deneyebilirsin.</li>';console.warn(e)}}
+$('aiSymbol').addEventListener('change',loadAiAnalysis);$('aiRefresh').addEventListener('click',loadAiAnalysis);
+
 async function load(){try{const r=await fetch('/api/dashboard',{cache:'no-store'});if(!r.ok)throw Error('API '+r.status);const d=await r.json();$('status').textContent=d.status==='online'?'Bot Servisi Çevrimiçi':'Servis Durumu';$('sideStatus').textContent=d.status==='online'?'ÇALIŞIYOR':'KONTROL';$('version').textContent=d.version;$('updated').textContent='Son güncelleme: '+fmtDate(d.time);$('balance').textContent=money(d.balance);pnl('today',d.today_pnl);$('count').textContent=d.stats.count;$('winrate').textContent=Number(d.stats.win_rate).toFixed(1)+'%';$('winloss').textContent=d.stats.wins+' kazanç · '+d.stats.losses+' kayıp';$('open').textContent=d.open_positions.length;$('risk').textContent='Açık risk: '+money(d.open_risk);pnl('netpnl',d.stats.total_pnl);$('pf').textContent=d.stats.profit_factor===null?'—':Number(d.stats.profit_factor).toFixed(2);$('avgwin').textContent=money(d.stats.average_win);pnl('dd',-Math.abs(d.stats.max_drawdown));$('symbolcount').textContent=d.symbols.length;$('autoscan').textContent=d.auto_scan?'AÇIK':'KAPALI';
 $('markets').innerHTML=d.markets.map(m=>{const q=d.quotes[m.symbol]||{};return `<tr><td><b>${m.symbol}</b></td><td>${q.price==null?'—':Number(q.price).toFixed(m.digits)}</td><td class="${Number(q.change_pct)>=0?'green':'red'}">${q.change_pct==null?'—':Number(q.change_pct).toFixed(2)+'%'}</td><td><span class="badge ${m.status==='OK'?'buy':'neutral'}">${m.status==='OK'?'Aktif':safe(m.status)}</span><div class="muted">${m.message||''}</div></td><td>${fmtDate(m.updated_at)}</td></tr>`}).join('');
 $('positions').innerHTML=d.open_positions.length?d.open_positions.map(p=>`<tr><td><b>${p.symbol}</b></td><td><span class="badge ${p.side==='BUY'?'buy':'sell'}">${p.side}</span></td><td>${safe(p.entry)}</td><td>${safe(p.current_price)}</td><td>${Number(p.lot||0).toFixed(2)}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">Açık pozisyon bulunmuyor.</td></tr>';
@@ -6163,7 +6168,7 @@ $('trades').innerHTML=d.trades.length?d.trades.map(t=>`<tr><td><b>${t.symbol}</b
 const latestSignal=(d.signals&&d.signals.length)?d.signals[0]:null;const latestId=latestSignal?String(latestSignal.id):null;const isFresh=previousLatestSignalId!==null&&latestId!==null&&latestId!==previousLatestSignalId;if(isFresh)showSignalToast(latestSignal);previousLatestSignalId=latestId;
 $('signalRows').innerHTML=d.signals&&d.signals.length?d.signals.map((s,i)=>`<tr class="${isFresh&&i===0?'new-signal-row':''}"><td>${fmtDate(s.sent_at)}</td><td><b>${safe(s.symbol)}</b></td><td><span class="badge ${s.action==='BUY'?'buy':'sell'}">${safe(s.action)}</span></td><td>${safe(s.price)}</td><td>${safe(s.sl)}</td><td>${safe(s.tp)}</td><td>${safe(s.score)}/5</td><td>${s.rr==null?'—':'1:'+Number(s.rr).toFixed(2)}</td></tr>`).join(''):'<tr><td colspan="8" class="empty">Henüz kaydedilmiş sinyal yok. Yeni Telegram sinyalleri gönderildikçe burada görünecek.</td></tr>';draw(d.equity);}
 catch(e){$('status').textContent='API bağlantı hatası';$('sideStatus').textContent='BAĞLANTI HATASI';console.error(e)}}
-load();loadCandles();setInterval(load,30000);setInterval(loadCandles,60000);
+load();loadCandles();loadAiAnalysis();setInterval(load,30000);setInterval(loadCandles,60000);setInterval(loadAiAnalysis,90000);
 // Keep mobile quick-nav highlight in sync with the visible section.
 const navLinks=[...document.querySelectorAll('.mobile-nav a')];
 const sectionObserver=new IntersectionObserver(entries=>{entries.forEach(entry=>{if(entry.isIntersecting){navLinks.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+entry.target.id));}})},{rootMargin:'-18% 0px -68% 0px',threshold:0});
@@ -6374,6 +6379,72 @@ def dashboard_backtest():
     except Exception:
         logger.exception("Dashboard backtest hatası: %s", symbol)
         return jsonify({"ok": False, "message": "Backtest sırasında hata oluştu."}), 500
+
+
+@app.route("/api/ai-analysis")
+def dashboard_ai_analysis():
+    """Read-only, rule-based indicator summary for dashboard; never sends signals/orders."""
+    symbol = request.args.get("symbol", "XAUUSD").upper()
+    if symbol not in SYMBOL_CONFIG:
+        return jsonify({"ok": False, "message": "Geçersiz sembol."}), 400
+    try:
+        raw = yf.download(SYMBOL_CONFIG[symbol]["yf"], period="5d", interval="5m",
+                          progress=False, auto_adjust=False, threads=False, timeout=12)
+        if raw is None or raw.empty:
+            return jsonify({"ok": False, "message": "Gösterge verisi şu anda alınamadı."}), 502
+        if isinstance(raw.columns, pd.MultiIndex):
+            raw.columns = raw.columns.get_level_values(0)
+        df = raw.dropna(subset=["Open", "High", "Low", "Close"]).copy()
+        if len(df) < 35:
+            return jsonify({"ok": False, "message": "Analiz için yeterli mum verisi yok."}), 502
+        df = add_indicators(df)
+        adx_series, plus_di, minus_di = calculate_adx(df)
+        last = df.iloc[-1]
+        ema9, ema21 = float(last["EMA9"]), float(last["EMA21"])
+        rsi = float(last["RSI14"])
+        macd = float(last["MACD_HIST"])
+        adx_value = float(adx_series.iloc[-1])
+        pdi, mdi = float(plus_di.iloc[-1]), float(minus_di.iloc[-1])
+        points = 0
+        reasons = []
+        if ema9 > ema21:
+            points += 1; reasons.append("EMA 9, EMA 21 üzerinde: kısa vadeli eğilim yukarı.")
+        else:
+            points -= 1; reasons.append("EMA 9, EMA 21 altında: kısa vadeli eğilim aşağı.")
+        if rsi >= 55:
+            points += 1; reasons.append(f"RSI {rsi:.1f}: yukarı yönlü momentum bölgesinde.")
+        elif rsi <= 45:
+            points -= 1; reasons.append(f"RSI {rsi:.1f}: aşağı yönlü momentum bölgesinde.")
+        else:
+            reasons.append(f"RSI {rsi:.1f}: nötr momentum aralığında.")
+        if macd > 0:
+            points += 1; reasons.append("MACD histogram pozitif: momentum yukarı yönlü.")
+        elif macd < 0:
+            points -= 1; reasons.append("MACD histogram negatif: momentum aşağı yönlü.")
+        else:
+            reasons.append("MACD histogram sıfıra yakın: belirgin yön yok.")
+        if adx_value >= 22:
+            if pdi > mdi:
+                points += 1; reasons.append(f"ADX {adx_value:.1f} ile trend gücü eşiğin üzerinde; +DI, -DI üzerinde.")
+            elif mdi > pdi:
+                points -= 1; reasons.append(f"ADX {adx_value:.1f} ile trend gücü eşiğin üzerinde; -DI, +DI üzerinde.")
+            else:
+                reasons.append(f"ADX {adx_value:.1f}: trend gücü var, DI yönleri birbirine yakın.")
+        else:
+            reasons.append(f"ADX {adx_value:.1f}: trend gücü zayıf (referans eşik 22).")
+        score = int(round((points + 4) / 8 * 100))
+        bias = "Yukarı eğilim" if points >= 2 else "Aşağı eğilim" if points <= -2 else "Karışık / yatay"
+        return jsonify({"ok": True, "symbol": symbol, "timeframe": "M5", "source": "Yahoo Finance · gecikmeli olabilir",
+                        "updated_at": df.index[-1].isoformat(), "score": score, "bias": bias,
+                        "ema9": round(ema9, 5), "ema21": round(ema21, 5),
+                        "ema_note": "EMA9 > EMA21" if ema9 > ema21 else "EMA9 ≤ EMA21",
+                        "rsi": round(rsi, 2), "rsi_note": "Güçlü alım momentumu" if rsi >= 55 else "Güçlü satım momentumu" if rsi <= 45 else "Nötr bölge",
+                        "macd_hist": round(macd, 6), "macd_note": "Pozitif" if macd > 0 else "Negatif" if macd < 0 else "Nötr",
+                        "adx": round(adx_value, 2), "adx_note": "Trend belirgin" if adx_value >= 22 else "Trend zayıf",
+                        "reasons": reasons})
+    except Exception:
+        logger.exception("Dashboard AI analysis error: %s", symbol)
+        return jsonify({"ok": False, "message": "Analiz hesaplanırken geçici bir hata oluştu."}), 500
 
 
 @app.route("/api/strategy")
