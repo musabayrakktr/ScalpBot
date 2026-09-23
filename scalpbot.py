@@ -802,7 +802,7 @@ def handle_telegram_command(chat_id, command, args=""):
 
         text = "📂 <b>AÇIK POZİSYONLAR</b>\n\n"
         for row in rows:
-            symbol, side, entry, sl, tp, risk = row[0], row, row, row, row, row[5]
+            symbol, side, entry, sl, tp, risk = row
             digits = SYMBOL_CONFIG.get(symbol, {}).get("digits", 5)
             icon = "🟢" if side == "BUY" else "🔴"
             text += f"{icon} <b>{symbol}</b> | {side} | Entry: {format_price(entry, digits)} | Risk: ${risk:.2f}\n"
