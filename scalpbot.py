@@ -842,18 +842,43 @@ def handle_telegram_command(chat_id, command, args=""):
         return
 
     elif clean_command == "/istatistik":
-        with DB_LOCK:
-            conn = db_connect()
-            cur = conn.cursor()
-            cur.execute("SELECT COUNT(*), COALESCE(SUM(pnl), 0) FROM closed_trades")
-            row = cur.fetchone()
-            conn.close()
+    with DB_LOCK:
+        conn = db_connect()
+        cur = conn.cursor()
 
-        total_trades = int(row[0]) if row and row[0] is not None else 0
-        total_pnl = float(row) if row and len(row) > 1 and row is not None else 0.0
+        cur.execute("""
+            SELECT
+                COUNT(*),
+                COALESCE(SUM(pnl), 0)
+            FROM closed_trades
+        """)
 
-        telegram_send(f"📊 <b>İSTATİSTİK</b>\nToplam İşlem: {total_trades}\nToplam PnL: {format_signed_pnl(total_pnl)}", chat_id)
-        return
+        row = cur.fetchone()
+        conn.close()
+
+    total_trades = (
+        int(row[0])
+        if row and row[0] is not None
+        else 0
+    )
+
+    total_pnl = (
+        float(row[1])
+        if row and len(row) > 1 and row[1] is not None
+        else 0.0
+    )
+
+    telegram_send(
+        f"""
+📊 <b>İSTATİSTİK</b>
+
+Toplam İşlem: {total_trades}
+Toplam PnL: {format_signed_pnl(total_pnl)}
+""",
+        chat_id
+    )
+
+    return
 
     elif clean_command == "/reset":
         set_state("paused", 0)
