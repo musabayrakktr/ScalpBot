@@ -741,6 +741,7 @@ def set_telegram_commands():
 
 def handle_telegram_command(chat_id, command, args=""):
     clean_command = command.split('@')[0].lower().strip()
+    logger.info(f"Komut alındı: {clean_command} | chat_id={chat_id}")
 
     if not is_authorized(chat_id):
         telegram_send("⛔ <b>Yetkiniz bulunmuyor.</b>", chat_id)
