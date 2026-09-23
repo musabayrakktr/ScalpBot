@@ -706,7 +706,7 @@ def get_market_status(symbol):
 
 
 def is_authorized(chat_id):
-    return True  # Geçici test onayı
+    return True
 
     try:
         return int(chat_id) in ALLOWED_IDS
