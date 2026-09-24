@@ -5757,6 +5757,107 @@ Henüz kapanmış işlem yok.
 
 
     # ========================================================
+    # ========================================================
+    # /TEST_KAYDI_SIL — Delete one specifically selected closed demo trade
+    # ========================================================
+
+    if command == "/test_kaydi_sil":
+
+        if not args:
+            conn = db_connect()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT id, symbol, side, pnl, closed_at
+                    FROM closed_trades
+                    ORDER BY id DESC
+                    LIMIT 10
+                    """
+                ).fetchall()
+            finally:
+                conn.close()
+
+            if not rows:
+                telegram_send(
+                    "📭 İşlem geçmişinde silinebilecek kapalı kayıt bulunamadı.",
+                    chat_id
+                )
+                return
+
+            lines = [
+                "🧹 <b>TEST KAYDI SİLME</b>",
+                "",
+                "Yalnızca seçtiğin <b>tek</b> kapalı işlem silinir.",
+                "Gerçekten test kaydı olduğundan emin ol.",
+                "",
+                "<b>Son 10 kapalı işlem:</b>"
+            ]
+            for row in rows:
+                trade_id, symbol, side, pnl, closed_at = row
+                pnl_value = float(pnl or 0)
+                sign = "+" if pnl_value >= 0 else ""
+                lines.append(
+                    f"ID <code>{trade_id}</code> · {symbol} {side} · "
+                    f"{sign}{pnl_value:.2f} USD · {closed_at or 'tarih yok'}"
+                )
+            lines.extend([
+                "",
+                "Silmek için:",
+                "<code>/test_kaydi_sil ID</code>",
+                "Örnek: <code>/test_kaydi_sil 15</code>"
+            ])
+            telegram_send("\\n".join(lines), chat_id)
+            return
+
+        try:
+            trade_id = int(args[0])
+            if trade_id <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            telegram_send(
+                "⚠️ Geçerli bir kayıt ID'si gir. Örnek: <code>/test_kaydi_sil 15</code>",
+                chat_id
+            )
+            return
+
+        conn = db_connect()
+        try:
+            existing = conn.execute(
+                """
+                SELECT id, symbol, side, pnl
+                FROM closed_trades
+                WHERE id = ?
+                """,
+                (trade_id,)
+            ).fetchone()
+
+            if not existing:
+                telegram_send(
+                    f"❌ ID <code>{trade_id}</code> ile kapalı işlem bulunamadı.",
+                    chat_id
+                )
+                return
+
+            conn.execute(
+                "DELETE FROM closed_trades WHERE id = ?",
+                (trade_id,)
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        _, symbol, side, pnl = existing
+        telegram_send(
+            "✅ <b>Kayıt silindi.</b>\n\n"
+            f"🗑️ ID: <code>{trade_id}</code>\n"
+            f"📌 İşlem: {symbol} {side}\n"
+            f"💵 Kayıtlı P&L: {float(pnl or 0):+.2f} USD\n\n"
+            "📊 Dashboard'u yenileyerek performans ve geçmişi kontrol et.",
+            chat_id
+        )
+        return
+
+
     # /RESET
     # ========================================================
 
