@@ -1,6 +1,6 @@
 # ============================================================
-# SCALPBOT PRO — TELEGRAM SIGNAL BOT v4.6
-# SELECTIVE STRATEGY + MANUAL POSITION TRACKER
+# SCALPBOT PRO — v5.13 POLISHED DASHBOARD + SIGNAL TRACKER
+# SELECTIVE STRATEGY + DEMO POSITION TRACKER
 # CLOSED BAR + ADX + ATR FILTER + TP/SL MONITOR
 # ============================================================
 #
@@ -59,7 +59,7 @@ from flask import Flask, jsonify, request
 
 APP_NAME = "ScalpBot Pro"
 
-VERSION = "5.11-PRO-TERMINAL"
+VERSION = "5.13-POLISHED-DASHBOARD"
 
 SIMULATION_MODE = True
 
@@ -204,7 +204,7 @@ ACCOUNT_RISK_PERCENT = 0.01
 
 MAX_DAILY_LOSS = 150.0
 
-MAX_OPEN_POSITIONS = 3
+MAX_OPEN_POSITIONS = 5
 
 MAX_TOTAL_OPEN_RISK = 300.0
 
@@ -1107,85 +1107,91 @@ def set_telegram_commands():
             {
                 "command": "start",
                 "description":
-                    "🤖 Ana paneli aç"
+                    "🤖 SCALPBOT ana paneli"
             },
 
             {
                 "command": "durum",
                 "description":
-                    "📡 Sistem durumunu göster"
+                    "📡 Bot, tarama ve bağlantı durumu"
             },
 
             {
                 "command": "oto",
                 "description":
-                    "🤖 Otomatik taramayı aç/kapat"
+                    "🔎 Sinyal taramasını aç veya durdur"
             },
 
             {
                 "command": "bakiye",
                 "description":
-                    "💰 Demo bakiyeyi göster"
+                    "💰 Demo bakiye ve kullanılabilir risk"
             },
 
             {
                 "command": "istatistik",
                 "description":
-                    "📊 Performans istatistikleri"
+                    "📊 Kazanç, kayıp ve performans"
             },
 
             {
                 "command": "risk",
                 "description":
-                    "🛡️ Risk merkezini göster"
+                    "🛡️ Günlük ve açık pozisyon riski"
             },
 
             {
                 "command": "pozisyonlar",
                 "description":
-                    "📂 Açık pozisyonları göster"
+                    "📂 Açık demo takip kayıtları"
             },
 
             {
                 "command": "pozisyon_ac",
                 "description":
-                    "🟢 Manuel pozisyon takip et"
+                    "📝 Demo pozisyon takip kaydı oluştur"
+            },
+
+            {
+                "command": "oto_pozisyon",
+                "description":
+                    "🤖 Sinyalde otomatik demo takibi aç/kapat"
             },
 
             {
                 "command": "pozisyon_kapat",
                 "description":
-                    "🔒 Manuel takip kaydını kapat"
+                    "🔒 Demo takip kaydını manuel kapat"
             },
 
             {
                 "command": "fiyat",
                 "description":
-                    "💹 Güncel fiyatları göster"
+                    "💹 İzlenen sembollerin fiyatları"
             },
 
             {
                 "command": "sinyaller",
                 "description":
-                    "🧠 Strateji filtrelerini göster"
+                    "🧠 Aktif strateji ve sinyal filtreleri"
             },
 
             {
                 "command": "test",
                 "description":
-                    "🔎 6 sembolü şimdi tara"
+                    "🔎 İzlenen 6 sembolü hemen tara"
             },
 
             {
                 "command": "backtest",
                 "description":
-                    "🧪 Geçmiş veri testi"
+                    "🧪 Stratejiyi geçmiş veride test et"
             },
 
             {
                 "command": "reset",
                 "description":
-                    "♻️ Sistemi yeniden aktif et"
+                    "♻️ Tarama sistemini yeniden başlat"
             },
         ]
     }
@@ -4870,7 +4876,7 @@ def handle_telegram_update(
         msg = f"""
 <b>╔════════════════════════════╗</b>
 <b>       🤖 SCALPBOT PRO</b>
-<b>          v4.6</b>
+<b>          v5.13</b>
 <b>╚════════════════════════════╝</b>
 
 <b>🧠 SELECTIVE SIGNAL ENGINE</b>
@@ -4911,6 +4917,7 @@ Risk: <b>${open_risk:.2f}</b>
 /risk — 🛡️ Risk merkezi
 /pozisyonlar — 📂 Pozisyonlar
 /pozisyon_ac — 🟢 Manuel takip
+/oto_pozisyon — 🤖 Demo otomatik aç/kapat
 /pozisyon_kapat — 🔒 Pozisyon kapat
 /fiyat — 💹 Fiyatlar
 /sinyaller — 🧠 Strateji
@@ -5177,6 +5184,38 @@ manuel tarama yapabilirsin.
 
     # ========================================================
     # /POZİSYON_AC
+    # ========================================================
+
+    # ========================================================
+    # /OTO_POZISYON — opt-in demo auto-tracking toggle
+    # ========================================================
+
+    if command == "/oto_pozisyon":
+
+        current = int(get_state("auto_demo_positions", 0))
+        new_value = 0 if current else 1
+        set_state("auto_demo_positions", new_value)
+
+        if new_value:
+            telegram_send(
+                "🤖 <b>OTOMATİK DEMO TAKİBİ AÇILDI</b>\n\n"
+                "Yeni ve filtreleri geçen Telegram sinyalleri, risk kontrollerinden sonra "
+                "demo pozisyon olarak otomatik kaydedilecek.\n"
+                "Entry / SL / TP / lot, sinyal anındaki değerlerden alınır.\n\n"
+                "⚠️ MT5'e emir gönderilmez. MT5 işlemini sen manuel yaparsın.\n"
+                "Kapatmak için tekrar /oto_pozisyon yaz.", chat_id
+            )
+        else:
+            telegram_send(
+                "🛑 <b>OTOMATİK DEMO TAKİBİ KAPATILDI</b>\n\n"
+                "Yeni sinyaller artık otomatik demo pozisyon oluşturmayacak.\n"
+                "Mevcut açık kayıtlar normal şekilde TP/SL takibinde kalır.", chat_id
+            )
+        return
+
+
+    # ========================================================
+    # /POZISYON_AC
     # ========================================================
 
     if command == "/pozisyon_ac":
@@ -5451,6 +5490,9 @@ Kullanım:
 
 ⚠️ Amaç daha fazla sinyal değil,
 <b>daha seçici sinyal</b> üretmektir.
+
+🤖 Demo otomatik takip: /oto_pozisyon
+MT5 emri gönderilmez.
 """
 
         telegram_send(
@@ -6149,6 +6191,35 @@ def scan_symbols():
                     )
                 )
 
+                # Optional automatic DEMO tracking. Broker/MT5 orders are never sent.
+                if int(get_state("auto_demo_positions", 0)) == 1:
+                    demo_result = open_manual_position(
+                        symbol,
+                        signal.get("action"),
+                        signal.get("price"),
+                        signal.get("sl"),
+                        signal.get("tp"),
+                        signal.get("lot")
+                    )
+                    if demo_result.get("ok"):
+                        telegram_send(
+                            "🤖 <b>OTOMATİK DEMO POZİSYON AÇILDI</b>\n\n"
+                            f"🆔 ID: <code>{demo_result['id']}</code>\n"
+                            f"💹 {demo_result['symbol']} · {demo_result['side']}\n"
+                            f"💰 Entry: <code>{demo_result['entry']}</code>\n"
+                            f"🛑 SL: <code>{demo_result['sl']}</code>\n"
+                            f"🎯 TP: <code>{demo_result['tp']}</code>\n"
+                            f"📦 Lot: <code>{demo_result['lot']:.2f}</code>\n"
+                            f"📐 R:R: <code>1:{demo_result['rr']:.2f}</code>\n\n"
+                            "⚠️ Yalnızca dashboard/demo takibidir; MT5 emri gönderilmedi."
+                        )
+                    else:
+                        telegram_send(
+                            "⚠️ <b>Demo pozisyon otomatik açılamadı</b>\n"
+                            f"{html.escape(str(demo_result.get('message', 'Risk/limit kontrolü reddetti.')))}\n"
+                            "Sinyal mesajı gönderildi, demo pozisyon kaydı oluşturulmadı."
+                        )
+
                 logger.info(
                     "SİNYAL GÖNDERİLDİ: "
                     "%s %s %s/5",
@@ -6342,14 +6413,14 @@ button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid #55b
 <aside class="side"><div class="brand"><div class="logo">S</div><div><b>SCALPBOT PRO</b><small>AI TRADING TERMINAL</small></div></div>
 <nav class="nav"><a class="active" href="#home">⌂　Ana Sayfa</a><a href="#market">▥　Piyasa Takibi</a><a href="#signals">◉　Sinyaller</a><a href="#history">◴　İşlem Geçmişi</a><a href="#performance">▤　Performans</a><a href="#analysis">✧　Strateji Analizi</a><a href="#ai-center">🧠　AI Analiz Merkezi</a><a href="#backtest">🧪　Backtest</a></nav>
 <div class="sidebox"><div class="muted">BOT DURUMU</div><h3 style="margin:9px 0;color:var(--green)"><span class="dot"></span><span id="sideStatus">Kontrol ediliyor</span></h3><div class="muted" style="font-size:12px">Sinyal botu · Demo kayıtları</div><hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><div class="muted">Sürüm</div><b id="version">—</b><div class="muted" style="margin-top:10px">Sunucu</div><b>Render / Flask</b></div>
-</aside><main id="home"><header class="top"><div><h1>Trading Dashboard <span class="tag">V5.11</span></h1><p>SCALPBOT PRO · Hesap ve piyasa görünümü</p></div><div class="topright"><div class="notify-wrap"><button type="button" id="notifyButton" class="notify-btn" aria-expanded="false" aria-label="Bildirimler">🔔 Bildirim <span id="notifyCount" class="notify-count"></span></button><div id="notifyPanel" class="notify-panel" role="region" aria-label="Bildirim merkezi"><div class="notify-head"><b>🔔 Bildirim Merkezi</b><button type="button" id="markNotificationsRead">Tümünü okundu işaretle</button></div><div id="notifyList" class="notify-empty">Bildirimler kontrol ediliyor…</div></div></div><div class="pill"><span class="dot"></span><strong id="status">Bağlanıyor</strong></div><div class="pill" id="updated">Güncelleme bekleniyor</div><button type="button" class="tag" id="refreshDashboard">⟳ Tümünü yenile</button></div></header>
+</aside><main id="home"><header class="top"><div><h1>Trading Dashboard <span class="tag">V5.13</span></h1><p>SCALPBOT PRO · Hesap ve piyasa görünümü</p></div><div class="topright"><div class="notify-wrap"><button type="button" id="notifyButton" class="notify-btn" aria-expanded="false" aria-label="Bildirimler">🔔 Bildirim <span id="notifyCount" class="notify-count"></span></button><div id="notifyPanel" class="notify-panel" role="region" aria-label="Bildirim merkezi"><div class="notify-head"><b>🔔 Bildirim Merkezi</b><button type="button" id="markNotificationsRead">Tümünü okundu işaretle</button></div><div id="notifyList" class="notify-empty">Bildirimler kontrol ediliyor…</div></div></div><div class="pill"><span class="dot"></span><strong id="status">Bağlanıyor</strong></div><div class="pill" id="updated">Güncelleme bekleniyor</div><button type="button" class="tag" id="refreshDashboard">⟳ Tümünü yenile</button></div></header>
 <section class="grid"><div class="card metric"><div class="ico">▣</div><div><label>Demo Bakiye</label><strong id="balance">—</strong><small>USD · Simülasyon</small></div></div><div class="card metric"><div class="ico" style="color:var(--green)">↗</div><div><label>Bugünkü P&amp;L</label><strong id="today">—</strong><small>Kapalı demo işlemler</small></div></div><div class="card metric"><div class="ico" style="color:var(--purple)">◉</div><div><label>Toplam İşlem</label><strong id="count">—</strong><small>Kaydedilmiş kapanışlar</small></div></div><div class="card metric"><div class="ico" style="color:var(--gold)">◎</div><div><label>Kazanma Oranı</label><strong id="winrate">—</strong><small id="winloss">Kayıtlı sonuçlar</small></div></div><div class="card metric"><div class="ico">⌘</div><div><label>Açık Pozisyon</label><strong id="open">—</strong><small id="risk">Açık risk: —</small></div></div></section>
 <section class="card" id="livechart" style="margin-top:16px"><div class="cardhead"><h2>🕯️ Canlı Mum Grafiği</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="chartSymbol" class="tag" aria-label="Sembol seçimi"><option value="EURUSD">EURUSD</option><option value="GBPUSD">GBPUSD</option><option value="USDJPY">USDJPY</option><option value="USDCAD">USDCAD</option><option value="USDCHF">USDCHF</option><option value="XAUUSD" selected>XAUUSD</option></select><select id="chartInterval" class="tag" aria-label="Zaman dilimi"><option value="5m">M5</option><option value="15m">M15</option><option value="1h">H1</option><option value="4h">H4</option><option value="1d">D1</option></select><span class="tag" id="chartInfo">Yahoo Finance · fiyatlar gecikmeli olabilir</span></div></div><div class="chartwrap" style="height:330px"><canvas id="candleChart"></canvas></div><div class="muted" id="chartStatus" style="font-size:11px">Grafik yükleniyor…</div></section>
 <div class="sectiongrid"><section class="card" id="performance"><div class="cardhead"><h2>📈 Performans ve İstatistik Merkezi</h2><select id="perfPeriod" class="tag" aria-label="Performans dönemi"><option value="today">Bugün</option><option value="7d">Son 7 gün</option><option value="30d" selected>Son 30 gün</option><option value="all">Tüm zamanlar</option></select></div><p class="muted" id="perfStatus">Gerçekleşmiş demo işlemler hesaplanıyor…</p><div class="stats"><div class="stat"><label>Toplam İşlem</label><strong id="perfCount">—</strong></div><div class="stat"><label>Kazanan / Kaybeden</label><strong id="perfWL">—</strong></div><div class="stat"><label>Kazanma Oranı</label><strong id="perfWinrate">—</strong></div><div class="stat"><label>Net P&amp;L</label><strong id="perfNet">—</strong></div><div class="stat"><label>Profit Factor</label><strong id="perfPF">—</strong></div><div class="stat"><label>Ort. Kazanç</label><strong id="perfAvgWin">—</strong></div><div class="stat"><label>Ort. Kayıp</label><strong id="perfAvgLoss">—</strong></div><div class="stat"><label>Max. Drawdown</label><strong id="perfDD">—</strong></div></div><div class="chartwrap" style="margin-top:16px"><canvas id="pnlChart"></canvas></div><h3 style="margin:18px 0 8px">🧭 Sembol Bazlı Sonuçlar</h3><div class="scroll"><table class="trades"><thead><tr><th>Sembol</th><th>İşlem</th><th>Kazanç</th><th>Kayıp</th><th>Kazanma %</th><th>Net P&amp;L</th></tr></thead><tbody id="perfSymbols"><tr><td colspan="6" class="empty">İstatistikler yükleniyor…</td></tr></tbody></table></div><p class="muted" style="font-size:11px;margin-top:12px">Yalnızca veritabanında kayıtlı, kapanmış demo işlemler hesaba katılır. İstatistikler geçmiş sonuçları özetler; geleceğe yönelik garanti değildir.</p></section>
 <section class="card" id="market"><div class="cardhead"><h2>🌐 Piyasa Takibi</h2><span class="tag">Bot sembolleri</span></div><div class="scroll"><table class="market-table"><thead><tr><th>Sembol</th><th>Fiyat</th><th>Günlük %</th><th>Durum</th><th>Son güncelleme</th></tr></thead><tbody id="markets"><tr><td colspan="5" class="empty">Piyasa bilgileri yükleniyor…</td></tr></tbody></table></div><p class="muted" style="font-size:11px;margin:12px 0 0">Fiyatlar Yahoo Finance verisinden gelir; sağlayıcı gecikmeleri olabilir.</p></section></div>
 <section class="card ai-panel" id="ai-center" style="margin-top:16px"><div class="cardhead"><h2>🧠 AI Analiz Merkezi</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="aiSymbol" class="tag" aria-label="Analiz sembolü"><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option><option>USDCAD</option><option>USDCHF</option><option selected>XAUUSD</option></select><button id="aiRefresh" class="tag" type="button">⟳ Analizi yenile</button></div></div><p class="muted" id="aiStatus">Teknik göstergeler hesaplanıyor…</p><div class="ai-summary"><div class="ai-gauge"><div class="ai-ring" id="aiRing"><div><strong id="aiScore">—</strong><small>Yön skoru</small></div></div><b id="aiBias">Analiz bekleniyor</b><span class="muted" id="aiConfidence">Güven seviyesi: —</span></div><div class="ai-readings"><div><label>EMA 9 / 21</label><strong id="aiEma">—</strong><small id="aiEmaNote">—</small></div><div><label>RSI 14</label><strong id="aiRsi">—</strong><small id="aiRsiNote">—</small></div><div><label>MACD histogram</label><strong id="aiMacd">—</strong><small id="aiMacdNote">—</small></div><div><label>ADX 14</label><strong id="aiAdx">—</strong><small id="aiAdxNote">—</small></div></div></div><div class="ai-explanation"><h3>🔎 Analiz gerekçeleri</h3><ul id="aiReasons"><li>Veriler yükleniyor…</li></ul><div class="ai-disclaimer">ℹ️ Gösterge tabanlı teknik özet; gerçek bir yapay zekâ modeli veya kesin tahmin değildir. Veri sağlayıcı gecikmeli olabilir. İşlem emri oluşturmaz.</div></div></section>
 <div class="twocol"><section class="card" id="signals"><div class="cardhead"><h2>🎯 Sinyal / Strateji Durumu</h2><span class="tag">Canlı sinyal üretimi tetiklenmez</span></div><p class="muted">Telegram gönderimi başarılı olan sinyaller burada listelenir. Kayıtlar bu sürümden itibaren tutulur; önceki sinyaller geriye dönük oluşturulmaz.</p><div class="scroll"><table class="trades"><thead><tr><th>Zaman</th><th>Sembol</th><th>Yön</th><th>Entry</th><th>SL</th><th>TP</th><th>Skor</th><th>R:R</th></tr></thead><tbody id="signalRows"><tr><td colspan="8" class="empty">Sinyaller yükleniyor…</td></tr></tbody></table></div><div class="stats"><div class="stat"><label>Takip edilen sembol</label><strong id="symbolcount">—</strong></div><div class="stat"><label>Tarama ayarı</label><strong id="autoscan">—</strong></div></div></section>
-<section class="card"><div class="cardhead"><h2>📂 Açık Pozisyonlar</h2><span class="tag">Manuel demo takibi</span></div><div class="scroll"><table class="trades"><thead><tr><th>Sembol</th><th>Yön</th><th>Giriş</th><th>Güncel</th><th>Lot</th></tr></thead><tbody id="positions"><tr><td colspan="5" class="empty">Yükleniyor…</td></tr></tbody></table></div></section></div>
+<section class="card"><div class="cardhead"><h2>📂 Açık Pozisyonlar</h2><span class="tag" id="positionMode">Demo takip · Otomatik açılış kapalı</span></div><div class="scroll"><table class="trades"><thead><tr><th>Sembol</th><th>Yön</th><th>Giriş</th><th>Güncel</th><th>Lot</th></tr></thead><tbody id="positions"><tr><td colspan="5" class="empty">Yükleniyor…</td></tr></tbody></table></div></section></div>
 <section class="card" id="history" style="margin-top:16px"><div class="cardhead"><h2>🧾 Son Kapanan İşlemler</h2><span class="tag">En yeni 10 kayıt</span></div><div class="scroll"><table class="trades"><thead><tr><th>Sembol</th><th>Yön</th><th>Giriş</th><th>Çıkış</th><th>P&amp;L</th><th>Kapanış</th></tr></thead><tbody id="trades"><tr><td colspan="6" class="empty">İşlem geçmişi yükleniyor…</td></tr></tbody></table></div></section>
 
 <section class="card" id="backtest" style="margin-top:16px"><div class="cardhead"><h2>🧪 Tarihsel Backtest</h2><span class="tag">İsteğe bağlı · emir göndermez</span></div><p class="muted">Seçtiğin sembol ve dönem için stratejiyi geçmiş mumlarda test et. Sonuçlar geçmiş veriye dayanır; gelecekteki performansı garanti etmez.</p><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label class="muted" for="btSymbol">Sembol</label><select class="tag" id="btSymbol"><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option><option>USDCAD</option><option>USDCHF</option><option selected>XAUUSD</option></select><label class="muted" for="btPeriod">Dönem</label><select class="tag" id="btPeriod"><option value="5d">5 gün</option><option value="1mo" selected>1 ay</option><option value="3mo">3 ay</option><option value="6mo">6 ay</option><option value="1y">1 yıl</option></select><button type="button" class="tag" id="runBacktest" style="cursor:pointer">▶ Backtest'i çalıştır</button></div><p class="muted" id="btStatus" aria-live="polite" style="margin:14px 0 6px">Test başlatılmadı.</p><div class="stats" id="btResults" style="display:none"><div class="stat"><label>Toplam işlem</label><strong id="btTrades">—</strong></div><div class="stat"><label>Kazanma oranı</label><strong id="btWinrate">—</strong></div><div class="stat"><label>Net P&amp;L</label><strong id="btPnl">—</strong></div><div class="stat"><label>Kazanç / kayıp</label><strong id="btWL">—</strong></div><div class="stat"><label>Ort. kazanç</label><strong id="btAvgWin">—</strong></div><div class="stat"><label>Ort. kayıp</label><strong id="btAvgLoss">—</strong></div></div><div class="ai-disclaimer">ℹ️ Backtest varsayımları ve veri kalitesi sonucu etkiler. Spread/slippage farkları ve gerçek piyasa koşulları sonucu değiştirebilir. Bu bölüm demo araştırma aracıdır.</div></section>
@@ -6384,7 +6455,7 @@ $('runBacktest').addEventListener('click',runBacktest);
 
 async function loadPerformance(){const period=$('perfPeriod').value;$('perfStatus').textContent='İşlem kayıtları hesaplanıyor…';try{const r=await fetch(`/api/performance?period=${encodeURIComponent(period)}`,{cache:'no-store'});const d=await r.json();if(!r.ok||!d.ok)throw Error(d.message||'İstatistik alınamadı');$('perfCount').textContent=d.count;$('perfWL').textContent=`${d.wins} / ${d.losses}`;$('perfWinrate').textContent=Number(d.win_rate).toFixed(1)+'%';pnl('perfNet',d.net_pnl);$('perfPF').textContent=d.profit_factor===null?'—':Number(d.profit_factor).toFixed(2);pnl('perfAvgWin',d.average_win);pnl('perfAvgLoss',-Math.abs(d.average_loss));pnl('perfDD',-Math.abs(d.max_drawdown));draw(d.equity||[]);$('perfSymbols').innerHTML=d.symbols.length?d.symbols.map(x=>`<tr><td><b>${safe(x.symbol)}</b></td><td>${x.count}</td><td>${x.wins}</td><td>${x.losses}</td><td>${Number(x.win_rate).toFixed(1)}%</td><td class="${Number(x.net_pnl)>=0?'green':'red'}">${money(x.net_pnl)}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">Seçilen dönemde kapanmış işlem yok.</td></tr>';$('perfStatus').textContent=`${d.period_label} · ${d.count} kapanmış demo işlem`;}catch(e){$('perfStatus').textContent='Performans verisi alınamadı: '+(e.message||'bağlantı hatası');$('perfSymbols').innerHTML='<tr><td colspan="6" class="empty">İstatistik API yanıtı kontrol edilmeli.</td></tr>';console.warn('Performans yükleme hatası:',e);addLocalAlert('Performans verisi alınamadı',e.message||'Performans API bağlantı hatası.')} }$('perfPeriod').addEventListener('change',loadPerformance);
 
-async function load(){try{const r=await fetch('/api/dashboard',{cache:'no-store'});if(!r.ok)throw Error('API '+r.status);const d=await r.json();$('status').textContent=d.status==='online'?'Bot Servisi Çevrimiçi':'Servis Durumu';$('sideStatus').textContent=d.status==='online'?'ÇALIŞIYOR':'KONTROL';$('version').textContent=d.version;$('updated').textContent='Son güncelleme: '+fmtDate(d.time);$('balance').textContent=money(d.balance);pnl('today',d.today_pnl);$('count').textContent=d.stats.count;$('winrate').textContent=Number(d.stats.win_rate).toFixed(1)+'%';$('winloss').textContent=d.stats.wins+' kazanç · '+d.stats.losses+' kayıp';$('open').textContent=d.open_positions.length;$('risk').textContent='Açık risk: '+money(d.open_risk);pnl('netpnl',d.stats.total_pnl);const legacyPf=$('pf');if(legacyPf)legacyPf.textContent=d.stats.profit_factor===null?'—':Number(d.stats.profit_factor).toFixed(2);const legacyAvgWin=$('avgwin');if(legacyAvgWin)legacyAvgWin.textContent=money(d.stats.average_win);pnl('dd',-Math.abs(d.stats.max_drawdown));$('symbolcount').textContent=d.symbols.length;$('autoscan').textContent=d.auto_scan?'AÇIK':'KAPALI';
+async function load(){try{const r=await fetch('/api/dashboard',{cache:'no-store'});if(!r.ok)throw Error('API '+r.status);const d=await r.json();$('status').textContent=d.status==='online'?'Bot Servisi Çevrimiçi':'Servis Durumu';$('sideStatus').textContent=d.status==='online'?'ÇALIŞIYOR':'KONTROL';$('version').textContent=d.version;$('updated').textContent='Son güncelleme: '+fmtDate(d.time);$('balance').textContent=money(d.balance);pnl('today',d.today_pnl);$('count').textContent=d.stats.count;$('winrate').textContent=Number(d.stats.win_rate).toFixed(1)+'%';$('winloss').textContent=d.stats.wins+' kazanç · '+d.stats.losses+' kayıp';$('open').textContent=d.open_positions.length;$('risk').textContent='Açık risk: '+money(d.open_risk);pnl('netpnl',d.stats.total_pnl);const legacyPf=$('pf');if(legacyPf)legacyPf.textContent=d.stats.profit_factor===null?'—':Number(d.stats.profit_factor).toFixed(2);const legacyAvgWin=$('avgwin');if(legacyAvgWin)legacyAvgWin.textContent=money(d.stats.average_win);pnl('dd',-Math.abs(d.stats.max_drawdown));$('symbolcount').textContent=d.symbols.length;$('autoscan').textContent=d.auto_scan?'AÇIK':'KAPALI';const pm=$('positionMode');if(pm)pm.textContent=d.auto_demo_positions?'Demo takip · Sinyalde otomatik açılış AÇIK':'Demo takip · Otomatik açılış kapalı';
 $('markets').innerHTML=d.markets.map(m=>{const q=d.quotes[m.symbol]||{};return `<tr><td><b>${m.symbol}</b></td><td>${q.price==null?'—':Number(q.price).toFixed(m.digits)}</td><td class="${Number(q.change_pct)>=0?'green':'red'}">${q.change_pct==null?'—':Number(q.change_pct).toFixed(2)+'%'}</td><td><span class="badge ${m.status==='OK'?'buy':'neutral'}">${m.status==='OK'?'Aktif':safe(m.status)}</span><div class="muted">${m.message||''}</div></td><td>${fmtDate(m.updated_at)}</td></tr>`}).join('');
 $('positions').innerHTML=d.open_positions.length?d.open_positions.map(p=>`<tr><td><b>${p.symbol}</b></td><td><span class="badge ${p.side==='BUY'?'buy':'sell'}">${p.side}</span></td><td>${safe(p.entry)}</td><td>${safe(p.current_price)}</td><td>${Number(p.lot||0).toFixed(2)}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">Açık pozisyon bulunmuyor.</td></tr>';
 $('trades').innerHTML=d.trades.length?d.trades.map(t=>`<tr><td><b>${t.symbol}</b></td><td><span class="badge ${t.side==='BUY'?'buy':'sell'}">${t.side}</span></td><td>${safe(t.entry)}</td><td>${safe(t.exit)}</td><td class="${Number(t.pnl)>=0?'green':'red'}">${money(t.pnl)}</td><td>${fmtDate(t.closed_at)}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">Henüz kapanmış işlem kaydı yok.</td></tr>';
@@ -6412,6 +6483,7 @@ def dashboard_data():
     """Read-only dashboard payload. Does not generate signals or mutate bot state."""
     balance = get_state("balance", INITIAL_BALANCE)
     auto_scan = bool(int(get_state("auto_scan", 1)))
+    auto_demo_positions = bool(int(get_state("auto_demo_positions", 0)))
     count, risk = get_open_position_stats()
     stats = get_statistics()
     if not np.isfinite(stats.get("profit_factor", 0.0)):
@@ -6479,7 +6551,7 @@ def dashboard_data():
         "balance": balance, "today_pnl": get_today_pnl(),
         "open_positions": positions, "open_risk": risk,
         "stats": stats, "symbols": list(SYMBOL_CONFIG.keys()),
-        "auto_scan": auto_scan, "markets": markets, "trades": trades,
+        "auto_scan": auto_scan, "auto_demo_positions": auto_demo_positions, "markets": markets, "trades": trades,
         "signals": signals, "equity": equity
     })
 
