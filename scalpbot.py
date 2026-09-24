@@ -59,7 +59,7 @@ from flask import Flask, jsonify, request
 
 APP_NAME = "ScalpBot Pro"
 
-VERSION = "5.10-NEON-POSTGRES"
+VERSION = "5.11-PRO-TERMINAL"
 
 SIMULATION_MODE = True
 
@@ -6206,11 +6206,42 @@ main{padding:28px clamp(16px,2.4vw,38px) 42px;max-width:1900px;width:100%;margin
 @media(max-width:760px){.layout{grid-template-columns:1fr}.side{display:none}main{padding:14px 11px calc(92px + env(safe-area-inset-bottom))}.top{border-bottom:1px solid #1a2d44;padding-bottom:14px}.grid .card{min-height:98px}.card{box-shadow:0 7px 20px #0002}.metric strong{font-size:clamp(16px,4.4vw,20px)}.cardhead{border-bottom:1px solid #1a2d43}.stats{gap:7px}.stat{padding:8px}.stat strong{font-size:17px}}
 @media(prefers-reduced-motion:reduce){.card{animation:none;transition:none}}
 
+
+/* v5.11 complete terminal polish: clearer hierarchy, compact mobile cards,
+   accessible focus states, table containment, and calmer motion. */
+:root{--panel:#0b192b;--line:#203b59;--muted:#91a9c5}
+body{background:radial-gradient(ellipse at 72% -18%,#14365a 0,transparent 43%),#050d19}
+main{max-width:1800px;width:100%;margin:0 auto}
+.side{position:sticky;top:0;height:100vh;overflow:auto}
+.card{border-color:#1d3855;background:linear-gradient(145deg,rgba(12,30,52,.98),rgba(7,19,35,.99));box-shadow:0 10px 28px #0002}
+.cardhead{padding-bottom:10px;border-bottom:1px solid #1a334e}
+.metric strong{font-variant-numeric:tabular-nums;line-height:1.2}
+.tag,button,select{min-height:30px}
+button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid #55baff;outline-offset:3px}
+.scroll{width:100%;border:1px solid #18324d;border-radius:10px}
+.market-table th,.market-table td,.trades th,.trades td{padding:12px 10px}
+.market-table th,.trades th{text-transform:uppercase;letter-spacing:.055em}
+.chartwrap{background:linear-gradient(180deg,#07182a,#061321);border:1px solid #193653;border-radius:10px}
+.empty{line-height:1.7}
+@media(max-width:760px){
+ .topright{flex-wrap:wrap}.topright>*{max-width:100%}
+ .topright #updated{flex:1;min-width:130px;text-align:center}
+ .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .metric{min-width:0}.metric>div:last-child{min-width:0}
+ .metric strong{font-size:clamp(15px,4vw,19px);letter-spacing:-.3px;overflow-wrap:anywhere;word-break:normal}
+ .metric label{line-height:1.35;min-height:28px}
+ .market-table,.trades{min-width:620px}
+ .cardhead{gap:8px}.cardhead .tag{font-size:10px}
+ .ai-readings>div{padding:10px}.ai-readings strong{font-size:16px;overflow-wrap:anywhere}
+ .notify-panel{max-width:calc(100vw - 24px)}
+}
+@media(max-width:360px){.metric strong{font-size:15px}.metric label{font-size:10px}.top h1{font-size:18px}.topright{gap:5px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 </style></head><body><div class="layout">
 <aside class="side"><div class="brand"><div class="logo">S</div><div><b>SCALPBOT PRO</b><small>AI TRADING TERMINAL</small></div></div>
 <nav class="nav"><a class="active" href="#home">⌂　Ana Sayfa</a><a href="#market">▥　Piyasa Takibi</a><a href="#signals">◉　Sinyaller</a><a href="#history">◴　İşlem Geçmişi</a><a href="#performance">▤　Performans</a><a href="#analysis">✧　Strateji Analizi</a><a href="#ai-center">🧠　AI Analiz Merkezi</a><a href="#backtest">🧪　Backtest</a></nav>
 <div class="sidebox"><div class="muted">BOT DURUMU</div><h3 style="margin:9px 0;color:var(--green)"><span class="dot"></span><span id="sideStatus">Kontrol ediliyor</span></h3><div class="muted" style="font-size:12px">Sinyal botu · Demo kayıtları</div><hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><div class="muted">Sürüm</div><b id="version">—</b><div class="muted" style="margin-top:10px">Sunucu</div><b>Render / Flask</b></div>
-</aside><main id="home"><header class="top"><div><h1>Trading Dashboard <span class="tag">V5.9</span></h1><p>SCALPBOT PRO · Hesap ve piyasa görünümü</p></div><div class="topright"><div class="notify-wrap"><button type="button" id="notifyButton" class="notify-btn" aria-expanded="false" aria-label="Bildirimler">🔔 Bildirim <span id="notifyCount" class="notify-count"></span></button><div id="notifyPanel" class="notify-panel" role="region" aria-label="Bildirim merkezi"><div class="notify-head"><b>🔔 Bildirim Merkezi</b><button type="button" id="markNotificationsRead">Tümünü okundu işaretle</button></div><div id="notifyList" class="notify-empty">Bildirimler kontrol ediliyor…</div></div></div><div class="pill"><span class="dot"></span><strong id="status">Bağlanıyor</strong></div><div class="pill" id="updated">Güncelleme bekleniyor</div><button type="button" class="tag" id="refreshDashboard">⟳ Tümünü yenile</button></div></header>
+</aside><main id="home"><header class="top"><div><h1>Trading Dashboard <span class="tag">V5.11</span></h1><p>SCALPBOT PRO · Hesap ve piyasa görünümü</p></div><div class="topright"><div class="notify-wrap"><button type="button" id="notifyButton" class="notify-btn" aria-expanded="false" aria-label="Bildirimler">🔔 Bildirim <span id="notifyCount" class="notify-count"></span></button><div id="notifyPanel" class="notify-panel" role="region" aria-label="Bildirim merkezi"><div class="notify-head"><b>🔔 Bildirim Merkezi</b><button type="button" id="markNotificationsRead">Tümünü okundu işaretle</button></div><div id="notifyList" class="notify-empty">Bildirimler kontrol ediliyor…</div></div></div><div class="pill"><span class="dot"></span><strong id="status">Bağlanıyor</strong></div><div class="pill" id="updated">Güncelleme bekleniyor</div><button type="button" class="tag" id="refreshDashboard">⟳ Tümünü yenile</button></div></header>
 <section class="grid"><div class="card metric"><div class="ico">▣</div><div><label>Demo Bakiye</label><strong id="balance">—</strong><small>USD · Simülasyon</small></div></div><div class="card metric"><div class="ico" style="color:var(--green)">↗</div><div><label>Bugünkü P&amp;L</label><strong id="today">—</strong><small>Kapalı demo işlemler</small></div></div><div class="card metric"><div class="ico" style="color:var(--purple)">◉</div><div><label>Toplam İşlem</label><strong id="count">—</strong><small>Kaydedilmiş kapanışlar</small></div></div><div class="card metric"><div class="ico" style="color:var(--gold)">◎</div><div><label>Kazanma Oranı</label><strong id="winrate">—</strong><small id="winloss">Kayıtlı sonuçlar</small></div></div><div class="card metric"><div class="ico">⌘</div><div><label>Açık Pozisyon</label><strong id="open">—</strong><small id="risk">Açık risk: —</small></div></div></section>
 <section class="card" id="livechart" style="margin-top:16px"><div class="cardhead"><h2>🕯️ Canlı Mum Grafiği</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="chartSymbol" class="tag" aria-label="Sembol seçimi"><option value="EURUSD">EURUSD</option><option value="GBPUSD">GBPUSD</option><option value="USDJPY">USDJPY</option><option value="USDCAD">USDCAD</option><option value="USDCHF">USDCHF</option><option value="XAUUSD" selected>XAUUSD</option></select><select id="chartInterval" class="tag" aria-label="Zaman dilimi"><option value="5m">M5</option><option value="15m">M15</option><option value="1h">H1</option><option value="4h">H4</option><option value="1d">D1</option></select><span class="tag" id="chartInfo">Yahoo Finance · fiyatlar gecikmeli olabilir</span></div></div><div class="chartwrap" style="height:330px"><canvas id="candleChart"></canvas></div><div class="muted" id="chartStatus" style="font-size:11px">Grafik yükleniyor…</div></section>
 <div class="sectiongrid"><section class="card" id="performance"><div class="cardhead"><h2>📈 Performans ve İstatistik Merkezi</h2><select id="perfPeriod" class="tag" aria-label="Performans dönemi"><option value="today">Bugün</option><option value="7d">Son 7 gün</option><option value="30d" selected>Son 30 gün</option><option value="all">Tüm zamanlar</option></select></div><p class="muted" id="perfStatus">Gerçekleşmiş demo işlemler hesaplanıyor…</p><div class="stats"><div class="stat"><label>Toplam İşlem</label><strong id="perfCount">—</strong></div><div class="stat"><label>Kazanan / Kaybeden</label><strong id="perfWL">—</strong></div><div class="stat"><label>Kazanma Oranı</label><strong id="perfWinrate">—</strong></div><div class="stat"><label>Net P&amp;L</label><strong id="perfNet">—</strong></div><div class="stat"><label>Profit Factor</label><strong id="perfPF">—</strong></div><div class="stat"><label>Ort. Kazanç</label><strong id="perfAvgWin">—</strong></div><div class="stat"><label>Ort. Kayıp</label><strong id="perfAvgLoss">—</strong></div><div class="stat"><label>Max. Drawdown</label><strong id="perfDD">—</strong></div></div><div class="chartwrap" style="margin-top:16px"><canvas id="pnlChart"></canvas></div><h3 style="margin:18px 0 8px">🧭 Sembol Bazlı Sonuçlar</h3><div class="scroll"><table class="trades"><thead><tr><th>Sembol</th><th>İşlem</th><th>Kazanç</th><th>Kayıp</th><th>Kazanma %</th><th>Net P&amp;L</th></tr></thead><tbody id="perfSymbols"><tr><td colspan="6" class="empty">İstatistikler yükleniyor…</td></tr></tbody></table></div><p class="muted" style="font-size:11px;margin-top:12px">Yalnızca veritabanında kayıtlı, kapanmış demo işlemler hesaba katılır. İstatistikler geçmiş sonuçları özetler; geleceğe yönelik garanti değildir.</p></section>
@@ -6261,7 +6292,7 @@ $('signalRows').innerHTML=d.signals&&d.signals.length?d.signals.map((s,i)=>`<tr 
 catch(e){$('status').textContent='API bağlantı hatası';$('sideStatus').textContent='BAĞLANTI HATASI';$('updated').textContent='Hata: '+(e.message||'Dashboard verisi alınamadı');$('markets').innerHTML='<tr><td colspan="5" class="empty">Piyasa verisi alınamadı. Yenile düğmesini deneyin.</td></tr>';$('positions').innerHTML='<tr><td colspan="5" class="empty">Pozisyon verisi alınamadı.</td></tr>';$('trades').innerHTML='<tr><td colspan="6" class="empty">İşlem geçmişi alınamadı.</td></tr>';$('signalRows').innerHTML='<tr><td colspan="8" class="empty">Sinyal verisi alınamadı.</td></tr>';console.error('Dashboard yükleme hatası:',e);addLocalAlert('Dashboard API hatası',e.message||'Dashboard verisi alınamadı.')} }
 async function refreshDashboard(){const b=$('refreshDashboard');if(b){b.disabled=true;b.textContent='⏳ Yenileniyor…'}try{await Promise.allSettled([load(),loadCandles(),loadAiAnalysis(),loadPerformance()])}finally{if(b){b.disabled=false;b.textContent='⟳ Tümünü yenile'}}}
 $('refreshDashboard').addEventListener('click',refreshDashboard);
-load();loadCandles();loadAiAnalysis();loadPerformance();loadNotifications();setInterval(loadNotifications,15000);setInterval(load,30000);setInterval(loadCandles,60000);setInterval(loadAiAnalysis,90000);
+load();loadCandles();loadAiAnalysis();loadPerformance();loadNotifications();setInterval(loadNotifications,15000);setInterval(load,30000);setInterval(loadCandles,60000);setInterval(loadAiAnalysis,90000);setInterval(loadPerformance,60000);
 // Keep mobile quick-nav highlight in sync with the visible section.
 const navLinks=[...document.querySelectorAll('.mobile-nav a')];
 const sectionObserver=new IntersectionObserver(entries=>{entries.forEach(entry=>{if(entry.isIntersecting){navLinks.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+entry.target.id));}})},{rootMargin:'-18% 0px -68% 0px',threshold:0});
