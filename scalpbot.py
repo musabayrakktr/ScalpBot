@@ -1,5 +1,5 @@
 # ============================================================
-# SCALPBOT PRO — v5.14 BETA SIMPLIFIED START MENU + SIGNAL TRACKER
+# SCALPBOT PRO — v5.13 POLISHED DASHBOARD + SIGNAL TRACKER
 # SELECTIVE STRATEGY + DEMO POSITION TRACKER
 # CLOSED BAR + ADX + ATR FILTER + TP/SL MONITOR
 # ============================================================
@@ -59,7 +59,7 @@ from flask import Flask, jsonify, request
 
 APP_NAME = "ScalpBot Pro"
 
-VERSION = "5.14-BETA-SIMPLIFIED-MENU"
+VERSION = "5.14-APPROVAL-BETA"
 
 SIMULATION_MODE = True
 
@@ -551,6 +551,20 @@ def init_db():
             )
         """)
 
+        # Pending approval requests survive restarts.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS pending_signals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT NOT NULL,
+                action TEXT NOT NULL,
+                price REAL, sl REAL, tp REAL, lot REAL,
+                score INTEGER, rr REAL, trend TEXT,
+                rsi REAL, adx REAL, macd_hist REAL, atr REAL,
+                bar_time TEXT, created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING'
+            )
+        """)
+
         # ----------------------------------------------------
         # SIGNAL COOLDOWN
         # ----------------------------------------------------
@@ -1012,7 +1026,8 @@ def is_authorized(
 
 def telegram_send(
     message,
-    chat_id=None
+    chat_id=None,
+    reply_markup=None
 ):
 
     if not TELEGRAM_TOKEN:
@@ -1051,6 +1066,8 @@ def telegram_send(
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
     }
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
 
     try:
 
@@ -4785,9 +4802,91 @@ def telegram_get_updates(
 # TELEGRAM COMMAND HANDLER
 # ============================================================
 
+def telegram_answer_callback(callback_id, text):
+    if not TELEGRAM_TOKEN:
+        return
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/answerCallbackQuery",
+            json={"callback_query_id": callback_id, "text": text},
+            timeout=10
+        )
+    except Exception:
+        logger.exception("Callback yanıtı gönderilemedi")
+
+def handle_signal_callback(update):
+    cq = update.get("callback_query")
+    if not cq:
+        return False
+    message = cq.get("message") or {}
+    chat_id = (message.get("chat") or {}).get("id")
+    if not is_authorized(chat_id):
+        telegram_answer_callback(cq.get("id"), "Yetkisiz işlem")
+        return True
+    data = str(cq.get("data") or "")
+    try:
+        action, sid = data.split(":", 1)
+        sid = int(sid)
+    except Exception:
+        telegram_answer_callback(cq.get("id"), "Geçersiz istek")
+        return True
+    with DB_LOCK:
+        conn = db_connect()
+        try:
+            row = conn.execute(
+                "SELECT id,symbol,action,price,sl,tp,lot,score,rr,trend,rsi,adx,macd_hist,atr,created_at,expires_at,status FROM pending_signals WHERE id=?",
+                (sid,)
+            ).fetchone()
+            if not row or row[16] != "PENDING":
+                telegram_answer_callback(cq.get("id"), "Bu sinyal artık geçerli değil")
+                return True
+            now = now_istanbul()
+            if now >= dt.datetime.fromisoformat(row[15]):
+                conn.execute("UPDATE pending_signals SET status='EXPIRED' WHERE id=?", (sid,))
+                conn.commit()
+                telegram_answer_callback(cq.get("id"), "İşlem süresi doldu")
+                telegram_send(f"⌛ <b>{row[1]} sinyalinin işlem süresi doldu.</b>", chat_id)
+                return True
+            if action == "REJECT":
+                conn.execute("UPDATE pending_signals SET status='REJECTED' WHERE id=?", (sid,))
+                conn.commit()
+                telegram_answer_callback(cq.get("id"), "Sinyal reddedildi")
+                return True
+            if action != "APPROVE":
+                telegram_answer_callback(cq.get("id"), "Bilinmeyen işlem")
+                return True
+            # Prevent parallel or duplicate active entries on the same instrument.
+            exists = conn.execute("SELECT 1 FROM positions WHERE symbol=? AND status='OPEN' LIMIT 1", (row[1],)).fetchone()
+            if exists:
+                telegram_answer_callback(cq.get("id"), "Bu sembolde zaten açık pozisyon var")
+                telegram_send(f"🔒 <b>{row[1]}</b> için zaten açık takip pozisyonu var. Sinyal onaylanmadı.", chat_id)
+                return True
+            conn.execute("UPDATE pending_signals SET status='APPROVED' WHERE id=?", (sid,))
+            conn.commit()
+        finally:
+            conn.close()
+    result = open_manual_position(row[1], row[2], row[3], row[4], row[5], row[6])
+    if result.get("ok"):
+        telegram_answer_callback(cq.get("id"), "Onaylandı ve demo takibine eklendi")
+        telegram_send(
+            f"✅ <b>SİNYAL ONAYLANDI · DEMO TAKİP</b>\n\n"
+            f"🆔 ID: <code>{result['id']}</code>\n💹 {row[1]} · {row[2]}\n"
+            f"💰 Entry: <code>{result['entry']}</code>\n🛑 SL: <code>{result['sl']}</code>\n"
+            f"🎯 TP: <code>{result['tp']}</code>\n\n"
+            "⚠️ MT5 emri gönderilmedi; pozisyonu MT5 üzerinde manuel açmalısın.",
+            chat_id
+        )
+    else:
+        telegram_answer_callback(cq.get("id"), "Pozisyon açılamadı")
+        telegram_send("⚠️ Onay sonrası demo kaydı oluşturulamadı: " + html.escape(str(result.get("message"))), chat_id)
+    return True
+
 def handle_telegram_update(
     update
 ):
+
+    if handle_signal_callback(update):
+        return
 
     message = update.get(
         "message"
@@ -4875,42 +4974,57 @@ def handle_telegram_update(
 
         msg = f"""
 <b>╔════════════════════════════╗</b>
-<b>       🧠 SCALPRADAR PRO</b>
-<b>          v5.14 BETA</b>
+<b>       🤖 SCALPBOT PRO</b>
+<b>          v5.13</b>
 <b>╚════════════════════════════╝</b>
 
-<b>📍 KONTROL MERKEZİ</b>
-━━━━━━━━━━━━━━━━━━━━
-📡 Bot: <b>ONLINE</b>
-🔎 Tarama: <b>{status}</b>
-💼 İşlem modu: <b>DEMO / MANUEL TAKİP</b>
+<b>🧠 SELECTIVE SIGNAL ENGINE</b>
 
-<b>💰 HESAP ÖZETİ</b>
+📡 Sistem: <b>🟢 ONLINE</b>
+🔎 Tarama: <b>{status}</b>
+💼 Mod: <b>DEMO / MANUEL</b>
+
+<b>📊 STRATEJİ</b>
+━━━━━━━━━━━━━━━━━━━━
+⏱️ M5 kapalı mum
+📈 EMA 9 / 21
+📊 RSI 14
+📉 MACD momentum
+💪 ADX + DI
+⚡ ATR volatilite
+🕐 1H trend filtresi
+🎯 Minimum R:R 1:2
+🏆 Minimum skor 4/5
+
+<b>💹 SEMBOLLER</b>
+━━━━━━━━━━━━━━━━━━━━
+EURUSD • GBPUSD • USDJPY
+USDCAD • USDCHF • XAUUSD
+
+<b>💰 DEMO</b>
 ━━━━━━━━━━━━━━━━━━━━
 Bakiye: <b>${balance:.2f}</b>
-Açık pozisyon: <b>{open_count}/{MAX_OPEN_POSITIONS}</b>
-Toplam açık risk: <b>${open_risk:.2f}</b>
+Açık: <b>{open_count}</b>
+Risk: <b>${open_risk:.2f}</b>
 
-<b>🧭 HIZLI ERİŞİM</b>
+<b>📋 KOMUTLAR</b>
 ━━━━━━━━━━━━━━━━━━━━
-📡 <b>SİNYALLER</b> — /sinyaller
-💼 <b>POZİSYONLAR</b> — /pozisyonlar
-🟢 <b>MANUEL İŞLEM</b> — /pozisyon_ac
-📊 <b>PERFORMANS</b> — /istatistik
-🛡️ <b>RİSK AYARLARI</b> — /risk
+/durum — 📡 Sistem durumu
+/oto — 🤖 Tarama aç/kapat
+/bakiye — 💰 Bakiye
+/istatistik — 📊 Performans
+/risk — 🛡️ Risk merkezi
+/pozisyonlar — 📂 Pozisyonlar
+/pozisyon_ac — 🟢 Manuel takip
+/oto_pozisyon — 🤖 Demo otomatik aç/kapat
+/pozisyon_kapat — 🔒 Pozisyon kapat
+/fiyat — 💹 Fiyatlar
+/sinyaller — 🧠 Strateji
+/test — 🔎 Şimdi tara
+/backtest — 🧪 Geçmiş test
+/reset — ♻️ Sistemi aktif et
 
-<b>⚙️ DİĞER ARAÇLAR</b>
-━━━━━━━━━━━━━━━━━━━━
-/durum — Sistem durumu
-/oto — Tarama aç/kapat
-/bakiye — Bakiye ayrıntısı
-/pozisyon_kapat — Demo kaydını kapat
-/fiyat — Piyasa fiyatları
-/test — Sinyal taraması
-/backtest — Geçmiş veri testi
-/reset — Sistemi yeniden etkinleştir
-
-⚠️ <b>Bilgi:</b> Bot broker'a emir göndermez. Pozisyonlar demo takip kayıtlarıdır.
+⚠️ <b>BOT GERÇEK EMİR GÖNDERMEZ.</b>
 """
 
         telegram_send(
@@ -6118,100 +6232,60 @@ def scan_symbols():
                 continue
 
             # ------------------------------------------------
-            # SEND SIGNAL
+            # SEND SIGNAL AS A TIME-LIMITED APPROVAL REQUEST
             # ------------------------------------------------
-
-            message = (
-                format_signal_message(
-                    signal
-                )
-            )
-
-            sent = telegram_send(
-                message
-            )
-
-            if sent:
-
-                # Record the successful Telegram signal for dashboard history.
+            with DB_LOCK:
+                conn = db_connect()
                 try:
-                    with DB_LOCK:
-                        conn = db_connect()
-                        try:
-                            conn.execute("""
-                                INSERT INTO signal_history
-                                (symbol, action, price, sl, tp, lot, score, rr,
-                                 trend, rsi, adx, macd_hist, atr, bar_time, sent_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """, (
-                                symbol, signal.get("action"), signal.get("price"),
-                                signal.get("sl"), signal.get("tp"), signal.get("lot"),
-                                signal.get("score"), signal.get("rr"), signal.get("trend"),
-                                signal.get("rsi"), signal.get("adx"),
-                                signal.get("macd_hist"), signal.get("atr"),
-                                str(signal.get("bar_time") or ""),
-                                now_istanbul().isoformat()
-                            ))
-                            conn.commit()
-                        finally:
-                            conn.close()
-                except Exception:
-                    logger.exception("Dashboard sinyal kaydı yazılamadı: %s", symbol)
-
-                mark_signal_sent(
-                    symbol
-                )
-
-                mark_bar_processed(
-                    symbol,
-                    bar_time
-                )
-
-                set_market_health(
-                    symbol,
-                    "SIGNAL",
-                    (
-                        f'{signal["action"]} '
-                        f'{signal["score"]}/5'
-                    )
-                )
-
-                # Optional automatic DEMO tracking. Broker/MT5 orders are never sent.
-                if int(get_state("auto_demo_positions", 0)) == 1:
-                    demo_result = open_manual_position(
-                        symbol,
-                        signal.get("action"),
-                        signal.get("price"),
-                        signal.get("sl"),
-                        signal.get("tp"),
-                        signal.get("lot")
-                    )
-                    if demo_result.get("ok"):
-                        telegram_send(
-                            "🤖 <b>OTOMATİK DEMO POZİSYON AÇILDI</b>\n\n"
-                            f"🆔 ID: <code>{demo_result['id']}</code>\n"
-                            f"💹 {demo_result['symbol']} · {demo_result['side']}\n"
-                            f"💰 Entry: <code>{demo_result['entry']}</code>\n"
-                            f"🛑 SL: <code>{demo_result['sl']}</code>\n"
-                            f"🎯 TP: <code>{demo_result['tp']}</code>\n"
-                            f"📦 Lot: <code>{demo_result['lot']:.2f}</code>\n"
-                            f"📐 R:R: <code>1:{demo_result['rr']:.2f}</code>\n\n"
-                            "⚠️ Yalnızca dashboard/demo takibidir; MT5 emri gönderilmedi."
-                        )
-                    else:
-                        telegram_send(
-                            "⚠️ <b>Demo pozisyon otomatik açılamadı</b>\n"
-                            f"{html.escape(str(demo_result.get('message', 'Risk/limit kontrolü reddetti.')))}\n"
-                            "Sinyal mesajı gönderildi, demo pozisyon kaydı oluşturulmadı."
-                        )
-
-                logger.info(
-                    "SİNYAL GÖNDERİLDİ: "
-                    "%s %s %s/5",
-                    symbol,
-                    signal["action"],
-                    signal["score"]
-                )
+                    active = conn.execute(
+                        "SELECT 1 FROM positions WHERE symbol=? AND status='OPEN' LIMIT 1",
+                        (symbol,)
+                    ).fetchone()
+                    pending = conn.execute(
+                        "SELECT 1 FROM pending_signals WHERE symbol=? AND status='PENDING' AND expires_at>? LIMIT 1",
+                        (symbol, now_istanbul().isoformat())
+                    ).fetchone()
+                    if active or pending:
+                        set_market_health(symbol, "LOCKED", "Açık veya onay bekleyen sinyal var")
+                        continue
+                    created = now_istanbul()
+                    expiry = created + dt.timedelta(minutes=10)
+                    cur = conn.execute("""
+                        INSERT INTO pending_signals
+                        (symbol,action,price,sl,tp,lot,score,rr,trend,rsi,adx,macd_hist,atr,bar_time,created_at,expires_at,status)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'PENDING')
+                    """, (symbol, signal.get("action"), signal.get("price"), signal.get("sl"),
+                          signal.get("tp"), signal.get("lot"), signal.get("score"), signal.get("rr"),
+                          signal.get("trend"), signal.get("rsi"), signal.get("adx"),
+                          signal.get("macd_hist"), signal.get("atr"), str(bar_time or ""),
+                          created.isoformat(), expiry.isoformat()))
+                    pending_id = cur.lastrowid
+                    conn.commit()
+                finally:
+                    conn.close()
+            message = format_signal_message(signal) + (
+                "\\n\\n⏳ <b>ONAY BEKLENİYOR · 10 DAKİKA</b>\\n"
+                "Sadece ONAYLA seçersen demo takip listesine eklenecek. "
+                "MT5'e emir gönderilmez."
+            )
+            markup = {"inline_keyboard": [[
+                {"text": "✅ ONAYLA", "callback_data": f"APPROVE:{pending_id}"},
+                {"text": "❌ REDDET", "callback_data": f"REJECT:{pending_id}"}
+            ]]}
+            sent = telegram_send(message, reply_markup=markup)
+            if sent:
+                mark_signal_sent(symbol)
+                mark_bar_processed(symbol, bar_time)
+                set_market_health(symbol, "PENDING", f"{signal['action']} onay bekliyor")
+                logger.info("ONAY BEKLEYEN SİNYAL: %s %s %s/5", symbol, signal["action"], signal["score"])
+            else:
+                with DB_LOCK:
+                    conn = db_connect()
+                    try:
+                        conn.execute("UPDATE pending_signals SET status='SEND_FAILED' WHERE id=?", (pending_id,))
+                        conn.commit()
+                    finally:
+                        conn.close()
 
         except Exception:
 
@@ -6398,7 +6472,7 @@ button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid #55b
 <aside class="side"><div class="brand"><div class="logo">S</div><div><b>SCALPBOT PRO</b><small>AI TRADING TERMINAL</small></div></div>
 <nav class="nav"><a class="active" href="#home">⌂　Ana Sayfa</a><a href="#market">▥　Piyasa Takibi</a><a href="#signals">◉　Sinyaller</a><a href="#history">◴　İşlem Geçmişi</a><a href="#performance">▤　Performans</a><a href="#analysis">✧　Strateji Analizi</a><a href="#ai-center">🧠　AI Analiz Merkezi</a><a href="#backtest">🧪　Backtest</a></nav>
 <div class="sidebox"><div class="muted">BOT DURUMU</div><h3 style="margin:9px 0;color:var(--green)"><span class="dot"></span><span id="sideStatus">Kontrol ediliyor</span></h3><div class="muted" style="font-size:12px">Sinyal botu · Demo kayıtları</div><hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><div class="muted">Sürüm</div><b id="version">—</b><div class="muted" style="margin-top:10px">Sunucu</div><b>Render / Flask</b></div>
-</aside><main id="home"><header class="top"><div><h1>Trading Dashboard <span class="tag">V5.14</span></h1><p>SCALPBOT PRO · Hesap ve piyasa görünümü</p></div><div class="topright"><div class="notify-wrap"><button type="button" id="notifyButton" class="notify-btn" aria-expanded="false" aria-label="Bildirimler">🔔 Bildirim <span id="notifyCount" class="notify-count"></span></button><div id="notifyPanel" class="notify-panel" role="region" aria-label="Bildirim merkezi"><div class="notify-head"><b>🔔 Bildirim Merkezi</b><button type="button" id="markNotificationsRead">Tümünü okundu işaretle</button></div><div id="notifyList" class="notify-empty">Bildirimler kontrol ediliyor…</div></div></div><div class="pill"><span class="dot"></span><strong id="status">Bağlanıyor</strong></div><div class="pill" id="updated">Güncelleme bekleniyor</div><button type="button" class="tag" id="refreshDashboard">⟳ Tümünü yenile</button></div></header>
+</aside><main id="home"><header class="top"><div><h1>Trading Dashboard <span class="tag">V5.13</span></h1><p>SCALPBOT PRO · Hesap ve piyasa görünümü</p></div><div class="topright"><div class="notify-wrap"><button type="button" id="notifyButton" class="notify-btn" aria-expanded="false" aria-label="Bildirimler">🔔 Bildirim <span id="notifyCount" class="notify-count"></span></button><div id="notifyPanel" class="notify-panel" role="region" aria-label="Bildirim merkezi"><div class="notify-head"><b>🔔 Bildirim Merkezi</b><button type="button" id="markNotificationsRead">Tümünü okundu işaretle</button></div><div id="notifyList" class="notify-empty">Bildirimler kontrol ediliyor…</div></div></div><div class="pill"><span class="dot"></span><strong id="status">Bağlanıyor</strong></div><div class="pill" id="updated">Güncelleme bekleniyor</div><button type="button" class="tag" id="refreshDashboard">⟳ Tümünü yenile</button></div></header>
 <section class="grid"><div class="card metric"><div class="ico">▣</div><div><label>Demo Bakiye</label><strong id="balance">—</strong><small>USD · Simülasyon</small></div></div><div class="card metric"><div class="ico" style="color:var(--green)">↗</div><div><label>Bugünkü P&amp;L</label><strong id="today">—</strong><small>Kapalı demo işlemler</small></div></div><div class="card metric"><div class="ico" style="color:var(--purple)">◉</div><div><label>Toplam İşlem</label><strong id="count">—</strong><small>Kaydedilmiş kapanışlar</small></div></div><div class="card metric"><div class="ico" style="color:var(--gold)">◎</div><div><label>Kazanma Oranı</label><strong id="winrate">—</strong><small id="winloss">Kayıtlı sonuçlar</small></div></div><div class="card metric"><div class="ico">⌘</div><div><label>Açık Pozisyon</label><strong id="open">—</strong><small id="risk">Açık risk: —</small></div></div></section>
 <section class="card" id="livechart" style="margin-top:16px"><div class="cardhead"><h2>🕯️ Canlı Mum Grafiği</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="chartSymbol" class="tag" aria-label="Sembol seçimi"><option value="EURUSD">EURUSD</option><option value="GBPUSD">GBPUSD</option><option value="USDJPY">USDJPY</option><option value="USDCAD">USDCAD</option><option value="USDCHF">USDCHF</option><option value="XAUUSD" selected>XAUUSD</option></select><select id="chartInterval" class="tag" aria-label="Zaman dilimi"><option value="5m">M5</option><option value="15m">M15</option><option value="1h">H1</option><option value="4h">H4</option><option value="1d">D1</option></select><span class="tag" id="chartInfo">Yahoo Finance · fiyatlar gecikmeli olabilir</span></div></div><div class="chartwrap" style="height:330px"><canvas id="candleChart"></canvas></div><div class="muted" id="chartStatus" style="font-size:11px">Grafik yükleniyor…</div></section>
 <div class="sectiongrid"><section class="card" id="performance"><div class="cardhead"><h2>📈 Performans ve İstatistik Merkezi</h2><select id="perfPeriod" class="tag" aria-label="Performans dönemi"><option value="today">Bugün</option><option value="7d">Son 7 gün</option><option value="30d" selected>Son 30 gün</option><option value="all">Tüm zamanlar</option></select></div><p class="muted" id="perfStatus">Gerçekleşmiş demo işlemler hesaplanıyor…</p><div class="stats"><div class="stat"><label>Toplam İşlem</label><strong id="perfCount">—</strong></div><div class="stat"><label>Kazanan / Kaybeden</label><strong id="perfWL">—</strong></div><div class="stat"><label>Kazanma Oranı</label><strong id="perfWinrate">—</strong></div><div class="stat"><label>Net P&amp;L</label><strong id="perfNet">—</strong></div><div class="stat"><label>Profit Factor</label><strong id="perfPF">—</strong></div><div class="stat"><label>Ort. Kazanç</label><strong id="perfAvgWin">—</strong></div><div class="stat"><label>Ort. Kayıp</label><strong id="perfAvgLoss">—</strong></div><div class="stat"><label>Max. Drawdown</label><strong id="perfDD">—</strong></div></div><div class="chartwrap" style="margin-top:16px"><canvas id="pnlChart"></canvas></div><h3 style="margin:18px 0 8px">🧭 Sembol Bazlı Sonuçlar</h3><div class="scroll"><table class="trades"><thead><tr><th>Sembol</th><th>İşlem</th><th>Kazanç</th><th>Kayıp</th><th>Kazanma %</th><th>Net P&amp;L</th></tr></thead><tbody id="perfSymbols"><tr><td colspan="6" class="empty">İstatistikler yükleniyor…</td></tr></tbody></table></div><p class="muted" style="font-size:11px;margin-top:12px">Yalnızca veritabanında kayıtlı, kapanmış demo işlemler hesaba katılır. İstatistikler geçmiş sonuçları özetler; geleceğe yönelik garanti değildir.</p></section>
