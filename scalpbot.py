@@ -59,7 +59,7 @@ from flask import Flask, jsonify, request
 
 APP_NAME = "ScalpBot Pro"
 
-VERSION = "5.9-PRO-TRADING-UI"
+VERSION = "5.10-NEON-POSTGRES"
 
 SIMULATION_MODE = True
 
@@ -361,18 +361,57 @@ def now_istanbul():
     )
 
 
+class PgCursorAdapter:
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def execute(self, sql, params=()):
+        is_position_insert = "INSERT INTO positions(" in sql and "RETURNING id" not in sql.upper()
+        sql = sql.replace("?", "%s")
+        sql = sql.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
+        if is_position_insert:
+            sql = sql.rstrip().rstrip(";") + " RETURNING id"
+        self._cursor.execute(sql, params or ())
+        return self
+
+    def fetchone(self):
+        return self._cursor.fetchone()
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+
+    @property
+    def lastrowid(self):
+        row = self._cursor.fetchone()
+        return row[0] if row else None
+
+
+class PgConnectionAdapter:
+    def __init__(self, connection):
+        self._connection = connection
+
+    def cursor(self):
+        return PgCursorAdapter(self._connection.cursor())
+
+    def execute(self, sql, params=()):
+        return self.cursor().execute(sql, params)
+
+    def commit(self):
+        self._connection.commit()
+
+    def close(self):
+        self._connection.close()
+
+
 def db_connect():
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if database_url:
+        import psycopg2
+        raw = psycopg2.connect(database_url, connect_timeout=15, sslmode="require")
+        return PgConnectionAdapter(raw)
 
-    conn = sqlite3.connect(
-        DB_FILE,
-        timeout=30,
-        check_same_thread=False
-    )
-
-    conn.execute(
-        "PRAGMA journal_mode=WAL"
-    )
-
+    conn = sqlite3.connect(DB_FILE, timeout=30, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 
@@ -389,12 +428,15 @@ def ensure_column(
 
     try:
 
-        columns = [
-            row[1]
-            for row in conn.execute(
-                f"PRAGMA table_info({table})"
-            ).fetchall()
-        ]
+        if os.getenv("DATABASE_URL", "").strip():
+            columns = [
+                row[0] for row in conn.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = %s",
+                    (table,)
+                ).fetchall()
+            ]
+        else:
+            columns = [row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()]
 
         if column not in columns:
 
