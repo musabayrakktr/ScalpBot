@@ -1,5 +1,5 @@
 # ============================================================
-# SCALPBOT PRO — v5.13 POLISHED DASHBOARD + SIGNAL TRACKER
+# SCALPBOT PRO — v5.14 BETA SIMPLIFIED START MENU + SIGNAL TRACKER
 # SELECTIVE STRATEGY + DEMO POSITION TRACKER
 # CLOSED BAR + ADX + ATR FILTER + TP/SL MONITOR
 # ============================================================
@@ -59,7 +59,7 @@ from flask import Flask, jsonify, request
 
 APP_NAME = "ScalpBot Pro"
 
-VERSION = "5.13-POLISHED-DASHBOARD"
+VERSION = "5.14-BETA-SIMPLIFIED-MENU"
 
 SIMULATION_MODE = True
 
@@ -4875,57 +4875,42 @@ def handle_telegram_update(
 
         msg = f"""
 <b>╔════════════════════════════╗</b>
-<b>       🤖 SCALPBOT PRO</b>
-<b>          v5.13</b>
+<b>       🧠 SCALPRADAR PRO</b>
+<b>          v5.14 BETA</b>
 <b>╚════════════════════════════╝</b>
 
-<b>🧠 SELECTIVE SIGNAL ENGINE</b>
-
-📡 Sistem: <b>🟢 ONLINE</b>
+<b>📍 KONTROL MERKEZİ</b>
+━━━━━━━━━━━━━━━━━━━━
+📡 Bot: <b>ONLINE</b>
 🔎 Tarama: <b>{status}</b>
-💼 Mod: <b>DEMO / MANUEL</b>
+💼 İşlem modu: <b>DEMO / MANUEL TAKİP</b>
 
-<b>📊 STRATEJİ</b>
-━━━━━━━━━━━━━━━━━━━━
-⏱️ M5 kapalı mum
-📈 EMA 9 / 21
-📊 RSI 14
-📉 MACD momentum
-💪 ADX + DI
-⚡ ATR volatilite
-🕐 1H trend filtresi
-🎯 Minimum R:R 1:2
-🏆 Minimum skor 4/5
-
-<b>💹 SEMBOLLER</b>
-━━━━━━━━━━━━━━━━━━━━
-EURUSD • GBPUSD • USDJPY
-USDCAD • USDCHF • XAUUSD
-
-<b>💰 DEMO</b>
+<b>💰 HESAP ÖZETİ</b>
 ━━━━━━━━━━━━━━━━━━━━
 Bakiye: <b>${balance:.2f}</b>
-Açık: <b>{open_count}</b>
-Risk: <b>${open_risk:.2f}</b>
+Açık pozisyon: <b>{open_count}/{MAX_OPEN_POSITIONS}</b>
+Toplam açık risk: <b>${open_risk:.2f}</b>
 
-<b>📋 KOMUTLAR</b>
+<b>🧭 HIZLI ERİŞİM</b>
 ━━━━━━━━━━━━━━━━━━━━
-/durum — 📡 Sistem durumu
-/oto — 🤖 Tarama aç/kapat
-/bakiye — 💰 Bakiye
-/istatistik — 📊 Performans
-/risk — 🛡️ Risk merkezi
-/pozisyonlar — 📂 Pozisyonlar
-/pozisyon_ac — 🟢 Manuel takip
-/oto_pozisyon — 🤖 Demo otomatik aç/kapat
-/pozisyon_kapat — 🔒 Pozisyon kapat
-/fiyat — 💹 Fiyatlar
-/sinyaller — 🧠 Strateji
-/test — 🔎 Şimdi tara
-/backtest — 🧪 Geçmiş test
-/reset — ♻️ Sistemi aktif et
+📡 <b>SİNYALLER</b> — /sinyaller
+💼 <b>POZİSYONLAR</b> — /pozisyonlar
+🟢 <b>MANUEL İŞLEM</b> — /pozisyon_ac
+📊 <b>PERFORMANS</b> — /istatistik
+🛡️ <b>RİSK AYARLARI</b> — /risk
 
-⚠️ <b>BOT GERÇEK EMİR GÖNDERMEZ.</b>
+<b>⚙️ DİĞER ARAÇLAR</b>
+━━━━━━━━━━━━━━━━━━━━
+/durum — Sistem durumu
+/oto — Tarama aç/kapat
+/bakiye — Bakiye ayrıntısı
+/pozisyon_kapat — Demo kaydını kapat
+/fiyat — Piyasa fiyatları
+/test — Sinyal taraması
+/backtest — Geçmiş veri testi
+/reset — Sistemi yeniden etkinleştir
+
+⚠️ <b>Bilgi:</b> Bot broker'a emir göndermez. Pozisyonlar demo takip kayıtlarıdır.
 """
 
         telegram_send(
@@ -6413,7 +6398,7 @@ button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid #55b
 <aside class="side"><div class="brand"><div class="logo">S</div><div><b>SCALPBOT PRO</b><small>AI TRADING TERMINAL</small></div></div>
 <nav class="nav"><a class="active" href="#home">⌂　Ana Sayfa</a><a href="#market">▥　Piyasa Takibi</a><a href="#signals">◉　Sinyaller</a><a href="#history">◴　İşlem Geçmişi</a><a href="#performance">▤　Performans</a><a href="#analysis">✧　Strateji Analizi</a><a href="#ai-center">🧠　AI Analiz Merkezi</a><a href="#backtest">🧪　Backtest</a></nav>
 <div class="sidebox"><div class="muted">BOT DURUMU</div><h3 style="margin:9px 0;color:var(--green)"><span class="dot"></span><span id="sideStatus">Kontrol ediliyor</span></h3><div class="muted" style="font-size:12px">Sinyal botu · Demo kayıtları</div><hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><div class="muted">Sürüm</div><b id="version">—</b><div class="muted" style="margin-top:10px">Sunucu</div><b>Render / Flask</b></div>
-</aside><main id="home"><header class="top"><div><h1>Trading Dashboard <span class="tag">V5.13</span></h1><p>SCALPBOT PRO · Hesap ve piyasa görünümü</p></div><div class="topright"><div class="notify-wrap"><button type="button" id="notifyButton" class="notify-btn" aria-expanded="false" aria-label="Bildirimler">🔔 Bildirim <span id="notifyCount" class="notify-count"></span></button><div id="notifyPanel" class="notify-panel" role="region" aria-label="Bildirim merkezi"><div class="notify-head"><b>🔔 Bildirim Merkezi</b><button type="button" id="markNotificationsRead">Tümünü okundu işaretle</button></div><div id="notifyList" class="notify-empty">Bildirimler kontrol ediliyor…</div></div></div><div class="pill"><span class="dot"></span><strong id="status">Bağlanıyor</strong></div><div class="pill" id="updated">Güncelleme bekleniyor</div><button type="button" class="tag" id="refreshDashboard">⟳ Tümünü yenile</button></div></header>
+</aside><main id="home"><header class="top"><div><h1>Trading Dashboard <span class="tag">V5.14</span></h1><p>SCALPBOT PRO · Hesap ve piyasa görünümü</p></div><div class="topright"><div class="notify-wrap"><button type="button" id="notifyButton" class="notify-btn" aria-expanded="false" aria-label="Bildirimler">🔔 Bildirim <span id="notifyCount" class="notify-count"></span></button><div id="notifyPanel" class="notify-panel" role="region" aria-label="Bildirim merkezi"><div class="notify-head"><b>🔔 Bildirim Merkezi</b><button type="button" id="markNotificationsRead">Tümünü okundu işaretle</button></div><div id="notifyList" class="notify-empty">Bildirimler kontrol ediliyor…</div></div></div><div class="pill"><span class="dot"></span><strong id="status">Bağlanıyor</strong></div><div class="pill" id="updated">Güncelleme bekleniyor</div><button type="button" class="tag" id="refreshDashboard">⟳ Tümünü yenile</button></div></header>
 <section class="grid"><div class="card metric"><div class="ico">▣</div><div><label>Demo Bakiye</label><strong id="balance">—</strong><small>USD · Simülasyon</small></div></div><div class="card metric"><div class="ico" style="color:var(--green)">↗</div><div><label>Bugünkü P&amp;L</label><strong id="today">—</strong><small>Kapalı demo işlemler</small></div></div><div class="card metric"><div class="ico" style="color:var(--purple)">◉</div><div><label>Toplam İşlem</label><strong id="count">—</strong><small>Kaydedilmiş kapanışlar</small></div></div><div class="card metric"><div class="ico" style="color:var(--gold)">◎</div><div><label>Kazanma Oranı</label><strong id="winrate">—</strong><small id="winloss">Kayıtlı sonuçlar</small></div></div><div class="card metric"><div class="ico">⌘</div><div><label>Açık Pozisyon</label><strong id="open">—</strong><small id="risk">Açık risk: —</small></div></div></section>
 <section class="card" id="livechart" style="margin-top:16px"><div class="cardhead"><h2>🕯️ Canlı Mum Grafiği</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="chartSymbol" class="tag" aria-label="Sembol seçimi"><option value="EURUSD">EURUSD</option><option value="GBPUSD">GBPUSD</option><option value="USDJPY">USDJPY</option><option value="USDCAD">USDCAD</option><option value="USDCHF">USDCHF</option><option value="XAUUSD" selected>XAUUSD</option></select><select id="chartInterval" class="tag" aria-label="Zaman dilimi"><option value="5m">M5</option><option value="15m">M15</option><option value="1h">H1</option><option value="4h">H4</option><option value="1d">D1</option></select><span class="tag" id="chartInfo">Yahoo Finance · fiyatlar gecikmeli olabilir</span></div></div><div class="chartwrap" style="height:330px"><canvas id="candleChart"></canvas></div><div class="muted" id="chartStatus" style="font-size:11px">Grafik yükleniyor…</div></section>
 <div class="sectiongrid"><section class="card" id="performance"><div class="cardhead"><h2>📈 Performans ve İstatistik Merkezi</h2><select id="perfPeriod" class="tag" aria-label="Performans dönemi"><option value="today">Bugün</option><option value="7d">Son 7 gün</option><option value="30d" selected>Son 30 gün</option><option value="all">Tüm zamanlar</option></select></div><p class="muted" id="perfStatus">Gerçekleşmiş demo işlemler hesaplanıyor…</p><div class="stats"><div class="stat"><label>Toplam İşlem</label><strong id="perfCount">—</strong></div><div class="stat"><label>Kazanan / Kaybeden</label><strong id="perfWL">—</strong></div><div class="stat"><label>Kazanma Oranı</label><strong id="perfWinrate">—</strong></div><div class="stat"><label>Net P&amp;L</label><strong id="perfNet">—</strong></div><div class="stat"><label>Profit Factor</label><strong id="perfPF">—</strong></div><div class="stat"><label>Ort. Kazanç</label><strong id="perfAvgWin">—</strong></div><div class="stat"><label>Ort. Kayıp</label><strong id="perfAvgLoss">—</strong></div><div class="stat"><label>Max. Drawdown</label><strong id="perfDD">—</strong></div></div><div class="chartwrap" style="margin-top:16px"><canvas id="pnlChart"></canvas></div><h3 style="margin:18px 0 8px">🧭 Sembol Bazlı Sonuçlar</h3><div class="scroll"><table class="trades"><thead><tr><th>Sembol</th><th>İşlem</th><th>Kazanç</th><th>Kayıp</th><th>Kazanma %</th><th>Net P&amp;L</th></tr></thead><tbody id="perfSymbols"><tr><td colspan="6" class="empty">İstatistikler yükleniyor…</td></tr></tbody></table></div><p class="muted" style="font-size:11px;margin-top:12px">Yalnızca veritabanında kayıtlı, kapanmış demo işlemler hesaba katılır. İstatistikler geçmiş sonuçları özetler; geleceğe yönelik garanti değildir.</p></section>
