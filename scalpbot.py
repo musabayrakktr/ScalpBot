@@ -59,7 +59,7 @@ from flask import Flask, jsonify, request
 
 APP_NAME = "ScalpBot Pro"
 
-VERSION = "5.4-BACKTEST-DASHBOARD"
+VERSION = "5.5-PERFORMANCE-CENTER"
 
 SIMULATION_MODE = True
 
@@ -6137,10 +6137,10 @@ html{scroll-behavior:smooth;scroll-padding-top:18px}
 <aside class="side"><div class="brand"><div class="logo">S</div><div><b>SCALPBOT PRO</b><small>AI TRADING TERMINAL</small></div></div>
 <nav class="nav"><a class="active" href="#home">⌂　Ana Sayfa</a><a href="#market">▥　Piyasa Takibi</a><a href="#signals">◉　Sinyaller</a><a href="#history">◴　İşlem Geçmişi</a><a href="#performance">▤　Performans</a><a href="#analysis">✧　Strateji Analizi</a><a href="#ai-center">🧠　AI Analiz Merkezi</a><a href="#backtest">🧪　Backtest</a></nav>
 <div class="sidebox"><div class="muted">BOT DURUMU</div><h3 style="margin:9px 0;color:var(--green)"><span class="dot"></span><span id="sideStatus">Kontrol ediliyor</span></h3><div class="muted" style="font-size:12px">Sinyal botu · Demo kayıtları</div><hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><div class="muted">Sürüm</div><b id="version">—</b><div class="muted" style="margin-top:10px">Sunucu</div><b>Render / Flask</b></div>
-</aside><main id="home"><header class="top"><div><h1>Trading Dashboard <span class="tag">V5.4</span></h1><p>SCALPBOT PRO · Hesap ve piyasa görünümü</p></div><div class="topright"><div class="pill"><span class="dot"></span><strong id="status">Bağlanıyor</strong></div><div class="pill" id="updated">Güncelleme bekleniyor</div></div></header>
+</aside><main id="home"><header class="top"><div><h1>Trading Dashboard <span class="tag">V5.5</span></h1><p>SCALPBOT PRO · Hesap ve piyasa görünümü</p></div><div class="topright"><div class="pill"><span class="dot"></span><strong id="status">Bağlanıyor</strong></div><div class="pill" id="updated">Güncelleme bekleniyor</div></div></header>
 <section class="grid"><div class="card metric"><div class="ico">▣</div><div><label>Demo Bakiye</label><strong id="balance">—</strong><small>USD · Simülasyon</small></div></div><div class="card metric"><div class="ico" style="color:var(--green)">↗</div><div><label>Bugünkü P&amp;L</label><strong id="today">—</strong><small>Kapalı demo işlemler</small></div></div><div class="card metric"><div class="ico" style="color:var(--purple)">◉</div><div><label>Toplam İşlem</label><strong id="count">—</strong><small>Kaydedilmiş kapanışlar</small></div></div><div class="card metric"><div class="ico" style="color:var(--gold)">◎</div><div><label>Kazanma Oranı</label><strong id="winrate">—</strong><small id="winloss">Kayıtlı sonuçlar</small></div></div><div class="card metric"><div class="ico">⌘</div><div><label>Açık Pozisyon</label><strong id="open">—</strong><small id="risk">Açık risk: —</small></div></div></section>
 <section class="card" id="livechart" style="margin-top:16px"><div class="cardhead"><h2>🕯️ Canlı Mum Grafiği</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="chartSymbol" class="tag" aria-label="Sembol seçimi"><option value="EURUSD">EURUSD</option><option value="GBPUSD">GBPUSD</option><option value="USDJPY">USDJPY</option><option value="USDCAD">USDCAD</option><option value="USDCHF">USDCHF</option><option value="XAUUSD" selected>XAUUSD</option></select><select id="chartInterval" class="tag" aria-label="Zaman dilimi"><option value="5m">M5</option><option value="15m">M15</option><option value="1h">H1</option><option value="4h">H4</option><option value="1d">D1</option></select><span class="tag" id="chartInfo">Yahoo Finance · fiyatlar gecikmeli olabilir</span></div></div><div class="chartwrap" style="height:330px"><canvas id="candleChart"></canvas></div><div class="muted" id="chartStatus" style="font-size:11px">Grafik yükleniyor…</div></section>
-<div class="sectiongrid"><section class="card" id="performance"><div class="cardhead"><h2>📈 Kâr / Zarar Eğrisi</h2><span class="tag">Gerçekleşmiş demo P&amp;L</span></div><div class="chartwrap"><canvas id="pnlChart"></canvas></div><div class="stats"><div class="stat"><label>Net P&amp;L</label><strong id="netpnl">—</strong></div><div class="stat"><label>Profit Factor</label><strong id="pf">—</strong></div><div class="stat"><label>Ort. Kazanç</label><strong id="avgwin">—</strong></div><div class="stat"><label>Max. Drawdown</label><strong id="dd">—</strong></div></div></section>
+<div class="sectiongrid"><section class="card" id="performance"><div class="cardhead"><h2>📈 Performans ve İstatistik Merkezi</h2><select id="perfPeriod" class="tag" aria-label="Performans dönemi"><option value="today">Bugün</option><option value="7d">Son 7 gün</option><option value="30d" selected>Son 30 gün</option><option value="all">Tüm zamanlar</option></select></div><p class="muted" id="perfStatus">Gerçekleşmiş demo işlemler hesaplanıyor…</p><div class="stats"><div class="stat"><label>Toplam İşlem</label><strong id="perfCount">—</strong></div><div class="stat"><label>Kazanan / Kaybeden</label><strong id="perfWL">—</strong></div><div class="stat"><label>Kazanma Oranı</label><strong id="perfWinrate">—</strong></div><div class="stat"><label>Net P&amp;L</label><strong id="perfNet">—</strong></div><div class="stat"><label>Profit Factor</label><strong id="perfPF">—</strong></div><div class="stat"><label>Ort. Kazanç</label><strong id="perfAvgWin">—</strong></div><div class="stat"><label>Ort. Kayıp</label><strong id="perfAvgLoss">—</strong></div><div class="stat"><label>Max. Drawdown</label><strong id="perfDD">—</strong></div></div><div class="chartwrap" style="margin-top:16px"><canvas id="pnlChart"></canvas></div><h3 style="margin:18px 0 8px">🧭 Sembol Bazlı Sonuçlar</h3><div class="scroll"><table class="trades"><thead><tr><th>Sembol</th><th>İşlem</th><th>Kazanç</th><th>Kayıp</th><th>Kazanma %</th><th>Net P&amp;L</th></tr></thead><tbody id="perfSymbols"><tr><td colspan="6" class="empty">İstatistikler yükleniyor…</td></tr></tbody></table></div><p class="muted" style="font-size:11px;margin-top:12px">Yalnızca veritabanında kayıtlı, kapanmış demo işlemler hesaba katılır. İstatistikler geçmiş sonuçları özetler; geleceğe yönelik garanti değildir.</p></section>
 <section class="card" id="market"><div class="cardhead"><h2>🌐 Piyasa Takibi</h2><span class="tag">Bot sembolleri</span></div><div class="scroll"><table class="market-table"><thead><tr><th>Sembol</th><th>Fiyat</th><th>Günlük %</th><th>Durum</th><th>Son güncelleme</th></tr></thead><tbody id="markets"><tr><td colspan="5" class="empty">Piyasa bilgileri yükleniyor…</td></tr></tbody></table></div><p class="muted" style="font-size:11px;margin:12px 0 0">Fiyatlar Yahoo Finance verisinden gelir; sağlayıcı gecikmeleri olabilir.</p></section></div>
 <section class="card ai-panel" id="ai-center" style="margin-top:16px"><div class="cardhead"><h2>🧠 AI Analiz Merkezi</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="aiSymbol" class="tag" aria-label="Analiz sembolü"><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option><option>USDCAD</option><option>USDCHF</option><option selected>XAUUSD</option></select><button id="aiRefresh" class="tag" type="button">⟳ Analizi yenile</button></div></div><p class="muted" id="aiStatus">Teknik göstergeler hesaplanıyor…</p><div class="ai-summary"><div class="ai-gauge"><div class="ai-ring" id="aiRing"><div><strong id="aiScore">—</strong><small>Yön skoru</small></div></div><b id="aiBias">Analiz bekleniyor</b><span class="muted" id="aiConfidence">Güven seviyesi: —</span></div><div class="ai-readings"><div><label>EMA 9 / 21</label><strong id="aiEma">—</strong><small id="aiEmaNote">—</small></div><div><label>RSI 14</label><strong id="aiRsi">—</strong><small id="aiRsiNote">—</small></div><div><label>MACD histogram</label><strong id="aiMacd">—</strong><small id="aiMacdNote">—</small></div><div><label>ADX 14</label><strong id="aiAdx">—</strong><small id="aiAdxNote">—</small></div></div></div><div class="ai-explanation"><h3>🔎 Analiz gerekçeleri</h3><ul id="aiReasons"><li>Veriler yükleniyor…</li></ul><div class="ai-disclaimer">ℹ️ Gösterge tabanlı teknik özet; gerçek bir yapay zekâ modeli veya kesin tahmin değildir. Veri sağlayıcı gecikmeli olabilir. İşlem emri oluşturmaz.</div></div></section>
 <div class="twocol"><section class="card" id="signals"><div class="cardhead"><h2>🎯 Sinyal / Strateji Durumu</h2><span class="tag">Canlı sinyal üretimi tetiklenmez</span></div><p class="muted">Telegram gönderimi başarılı olan sinyaller burada listelenir. Kayıtlar bu sürümden itibaren tutulur; önceki sinyaller geriye dönük oluşturulmaz.</p><div class="scroll"><table class="trades"><thead><tr><th>Zaman</th><th>Sembol</th><th>Yön</th><th>Entry</th><th>SL</th><th>TP</th><th>Skor</th><th>R:R</th></tr></thead><tbody id="signalRows"><tr><td colspan="8" class="empty">Sinyaller yükleniyor…</td></tr></tbody></table></div><div class="stats"><div class="stat"><label>Takip edilen sembol</label><strong id="symbolcount">—</strong></div><div class="stat"><label>Tarama ayarı</label><strong id="autoscan">—</strong></div></div></section>
@@ -6162,9 +6162,11 @@ async function loadCandles(){const symbol=$('chartSymbol').value,interval=$('cha
 $('chartSymbol').addEventListener('change',loadCandles);$('chartInterval').addEventListener('change',loadCandles);
 async function loadAiAnalysis(){const symbol=$('aiSymbol').value;$('aiStatus').textContent=`${symbol} için teknik göstergeler alınıyor…`;$('aiReasons').innerHTML='<li>Hesaplama sürüyor…</li>';try{const res=await fetch(`/api/ai-analysis?symbol=${encodeURIComponent(symbol)}`,{cache:'no-store'});const d=await res.json();if(!res.ok||!d.ok)throw Error(d.message||'Analiz alınamadı');$('aiScore').textContent=d.score;$('aiBias').textContent=d.bias;$('aiConfidence').textContent='Koşul uyumu: '+d.score+' / 100';$('aiRing').style.background=`conic-gradient(${d.score>=60?'#00d6a0':d.score<=40?'#ff526d':'#ffc857'} ${d.score*3.6}deg,#183451 0deg)`;$('aiEma').textContent=`${d.ema9} / ${d.ema21}`;$('aiEmaNote').textContent=d.ema_note;$('aiRsi').textContent=d.rsi;$('aiRsiNote').textContent=d.rsi_note;$('aiMacd').textContent=d.macd_hist;$('aiMacdNote').textContent=d.macd_note;$('aiAdx').textContent=d.adx;$('aiAdxNote').textContent=d.adx_note;$('aiReasons').innerHTML=d.reasons.map(x=>`<li>${safe(x)}</li>`).join('');$('aiStatus').textContent=`${symbol} · ${d.timeframe} · Son mum: ${fmtDate(d.updated_at)} · ${d.source}`}catch(e){$('aiStatus').textContent=e.message||'Analiz şu anda alınamadı.';$('aiReasons').innerHTML='<li>Veri sağlayıcıya ulaşılamadı. Biraz sonra tekrar deneyebilirsin.</li>';console.warn(e)}}
 $('aiSymbol').addEventListener('change',loadAiAnalysis);$('aiRefresh').addEventListener('click',loadAiAnalysis);
-async function runBacktest(){const button=$('runBacktest');button.disabled=true;button.textContent='⏳ Test çalışıyor…';$('btStatus').textContent='Geçmiş mumlar alınıyor ve test hesaplanıyor…';$('btResults').style.display='none';try{const symbol=$('btSymbol').value,period=$('btPeriod').value;const response=await fetch(`/api/backtest?symbol=${encodeURIComponent(symbol)}&period=${encodeURIComponent(period)}`,{cache:'no-store'});const d=await response.json();if(!response.ok||!d.ok)throw Error(d.message||'Backtest başarısız oldu.');$('btTrades').textContent=safe(d.trades);$('btWinrate').textContent=Number(d.win_rate||0).toFixed(1)+'%';$('btPnl').textContent=money(d.pnl||0);$('btPnl').className=Number(d.pnl||0)>=0?'green':'red';$('btWL').textContent=`${safe(d.wins)} / ${safe(d.losses)}`;$('btAvgWin').textContent=money(d.average_win||0);$('btAvgLoss').textContent=money(d.average_loss||0);$('btResults').style.display='grid';$('btStatus').textContent=`${symbol} · ${$('btPeriod').selectedOptions[0].textContent} · ${d.message||'Backtest tamamlandı.'}`;}catch(e){$('btStatus').textContent=e.message||'Backtest sırasında hata oluştu.';}finally{button.disabled=false;button.textContent="▶ Backtest'i çalıştır";}}
+async function runBacktest(){const button=$('runBacktest');button.disabled=true;button.textContent='⏳ Test çalışıyor…';$('btStatus').textContent='Geçmiş mumlar alınıyor ve test hesaplanıyor…';$('btResults').style.display='none';try{const symbol=$('btSymbol').value,period=$('btPeriod').value;const response=await fetch(`/api/backtest?symbol=${encodeURIComponent(symbol)}&period=${encodeURIComponent(period)}`,{cache:'no-store'});const d=await response.json();if(!response.ok||!d.ok)throw Error(d.message||'Backtest başarısız oldu.');$('btTrades').textContent=safe(d.trades);$('btWinrate').textContent=Number(d.win_rate||0).toFixed(1)+'%';$('btPnl').textContent=money(d.pnl||0);$('btPnl').className=Number(d.pnl||0)>=0?'green':'red';$('btWL').textContent=`${safe(d.wins)} / ${safe(d.losses)}`;$('btAvgWin').textContent=money(d.average_win||0);$('btAvgLoss').textContent=money(d.average_loss||0);$('btResults').style.display='grid';$('btStatus').textContent=`${symbol} · ${$('btPeriod').selectedOptions[0].textContent} · ${d.message||'Backtest tamamlandı.'}`;}catch(e){$('btStatus').textContent=e.message||'Backtest sırasında hata oluştu.';}finally{button.disabled=false;button.textContent='▶ Backtest'i çalıştır';}}
 $('runBacktest').addEventListener('click',runBacktest);
 
+
+async function loadPerformance(){const period=$('perfPeriod').value;$('perfStatus').textContent='İşlem kayıtları hesaplanıyor…';try{const r=await fetch(`/api/performance?period=${encodeURIComponent(period)}`,{cache:'no-store'});const d=await r.json();if(!r.ok||!d.ok)throw Error(d.message||'İstatistik alınamadı');$('perfCount').textContent=d.count;$('perfWL').textContent=`${d.wins} / ${d.losses}`;$('perfWinrate').textContent=Number(d.win_rate).toFixed(1)+'%';pnl('perfNet',d.net_pnl);$('perfPF').textContent=d.profit_factor===null?'—':Number(d.profit_factor).toFixed(2);pnl('perfAvgWin',d.average_win);pnl('perfAvgLoss',-Math.abs(d.average_loss));pnl('perfDD',-Math.abs(d.max_drawdown));draw(d.equity||[]);$('perfSymbols').innerHTML=d.symbols.length?d.symbols.map(x=>`<tr><td><b>${safe(x.symbol)}</b></td><td>${x.count}</td><td>${x.wins}</td><td>${x.losses}</td><td>${Number(x.win_rate).toFixed(1)}%</td><td class="${Number(x.net_pnl)>=0?'green':'red'}">${money(x.net_pnl)}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">Seçilen dönemde kapanmış işlem yok.</td></tr>';$('perfStatus').textContent=`${d.period_label} · ${d.count} kapanmış demo işlem`;}catch(e){$('perfStatus').textContent=e.message||'Performans verisi alınamadı.';console.warn(e)}}$('perfPeriod').addEventListener('change',loadPerformance);
 
 async function load(){try{const r=await fetch('/api/dashboard',{cache:'no-store'});if(!r.ok)throw Error('API '+r.status);const d=await r.json();$('status').textContent=d.status==='online'?'Bot Servisi Çevrimiçi':'Servis Durumu';$('sideStatus').textContent=d.status==='online'?'ÇALIŞIYOR':'KONTROL';$('version').textContent=d.version;$('updated').textContent='Son güncelleme: '+fmtDate(d.time);$('balance').textContent=money(d.balance);pnl('today',d.today_pnl);$('count').textContent=d.stats.count;$('winrate').textContent=Number(d.stats.win_rate).toFixed(1)+'%';$('winloss').textContent=d.stats.wins+' kazanç · '+d.stats.losses+' kayıp';$('open').textContent=d.open_positions.length;$('risk').textContent='Açık risk: '+money(d.open_risk);pnl('netpnl',d.stats.total_pnl);$('pf').textContent=d.stats.profit_factor===null?'—':Number(d.stats.profit_factor).toFixed(2);$('avgwin').textContent=money(d.stats.average_win);pnl('dd',-Math.abs(d.stats.max_drawdown));$('symbolcount').textContent=d.symbols.length;$('autoscan').textContent=d.auto_scan?'AÇIK':'KAPALI';
 $('markets').innerHTML=d.markets.map(m=>{const q=d.quotes[m.symbol]||{};return `<tr><td><b>${m.symbol}</b></td><td>${q.price==null?'—':Number(q.price).toFixed(m.digits)}</td><td class="${Number(q.change_pct)>=0?'green':'red'}">${q.change_pct==null?'—':Number(q.change_pct).toFixed(2)+'%'}</td><td><span class="badge ${m.status==='OK'?'buy':'neutral'}">${m.status==='OK'?'Aktif':safe(m.status)}</span><div class="muted">${m.message||''}</div></td><td>${fmtDate(m.updated_at)}</td></tr>`}).join('');
@@ -6173,7 +6175,7 @@ $('trades').innerHTML=d.trades.length?d.trades.map(t=>`<tr><td><b>${t.symbol}</b
 const latestSignal=(d.signals&&d.signals.length)?d.signals[0]:null;const latestId=latestSignal?String(latestSignal.id):null;const isFresh=previousLatestSignalId!==null&&latestId!==null&&latestId!==previousLatestSignalId;if(isFresh)showSignalToast(latestSignal);previousLatestSignalId=latestId;
 $('signalRows').innerHTML=d.signals&&d.signals.length?d.signals.map((s,i)=>`<tr class="${isFresh&&i===0?'new-signal-row':''}"><td>${fmtDate(s.sent_at)}</td><td><b>${safe(s.symbol)}</b></td><td><span class="badge ${s.action==='BUY'?'buy':'sell'}">${safe(s.action)}</span></td><td>${safe(s.price)}</td><td>${safe(s.sl)}</td><td>${safe(s.tp)}</td><td>${safe(s.score)}/5</td><td>${s.rr==null?'—':'1:'+Number(s.rr).toFixed(2)}</td></tr>`).join(''):'<tr><td colspan="8" class="empty">Henüz kaydedilmiş sinyal yok. Yeni Telegram sinyalleri gönderildikçe burada görünecek.</td></tr>';draw(d.equity);}
 catch(e){$('status').textContent='API bağlantı hatası';$('sideStatus').textContent='BAĞLANTI HATASI';console.error(e)}}
-load();loadCandles();loadAiAnalysis();setInterval(load,30000);setInterval(loadCandles,60000);setInterval(loadAiAnalysis,90000);
+load();loadCandles();loadAiAnalysis();loadPerformance();setInterval(load,30000);setInterval(loadCandles,60000);setInterval(loadAiAnalysis,90000);
 // Keep mobile quick-nav highlight in sync with the visible section.
 const navLinks=[...document.querySelectorAll('.mobile-nav a')];
 const sectionObserver=new IntersectionObserver(entries=>{entries.forEach(entry=>{if(entry.isIntersecting){navLinks.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+entry.target.id));}})},{rootMargin:'-18% 0px -68% 0px',threshold:0});
@@ -6303,6 +6305,86 @@ def get_cached_quotes():
         _QUOTE_CACHE["at"] = time.time()
         _QUOTE_CACHE["data"] = quotes
     return dict(quotes)
+
+
+@app.route("/api/performance")
+def performance_data():
+    """Read-only filtered performance summary of closed demo trades."""
+    period = (request.args.get("period") or "30d").lower()
+    if period not in {"today", "7d", "30d", "all"}:
+        return jsonify({"ok": False, "message": "Geçersiz dönem."}), 400
+
+    now = now_istanbul()
+    if period == "today":
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        label = "Bugün"
+    elif period == "7d":
+        start = now - dt.timedelta(days=7)
+        label = "Son 7 gün"
+    elif period == "30d":
+        start = now - dt.timedelta(days=30)
+        label = "Son 30 gün"
+    else:
+        start = None
+        label = "Tüm zamanlar"
+
+    with DB_LOCK:
+        conn = db_connect()
+        try:
+            rows = conn.execute("SELECT symbol, pnl, closed_at FROM closed_trades ORDER BY id ASC").fetchall()
+        finally:
+            conn.close()
+
+    selected = []
+    for symbol, raw_pnl, raw_date in rows:
+        parsed = None
+        if raw_date:
+            try:
+                parsed = dt.datetime.fromisoformat(str(raw_date).replace("Z", "+00:00"))
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=TZ)
+                parsed = parsed.astimezone(TZ)
+            except (ValueError, TypeError):
+                try:
+                    parsed = dt.datetime.strptime(str(raw_date)[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=TZ)
+                except (ValueError, TypeError):
+                    parsed = None
+        if start is not None and (parsed is None or parsed < start):
+            continue
+        selected.append({"symbol": str(symbol or "—"), "pnl": float(raw_pnl or 0.0), "closed_at": parsed})
+
+    pnls = [item["pnl"] for item in selected]
+    wins = [value for value in pnls if value > 0]
+    losses = [value for value in pnls if value < 0]
+    net = sum(pnls)
+    gross_profit, gross_loss = sum(wins), abs(sum(losses))
+    peak = running = max_dd = 0.0
+    equity = []
+    for value in pnls:
+        running += value
+        peak = max(peak, running)
+        max_dd = max(max_dd, peak - running)
+        equity.append(value)
+    by_symbol = {}
+    for item in selected:
+        group = by_symbol.setdefault(item["symbol"], {"symbol": item["symbol"], "count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0})
+        group["count"] += 1
+        group["wins"] += int(item["pnl"] > 0)
+        group["losses"] += int(item["pnl"] < 0)
+        group["net_pnl"] += item["pnl"]
+    symbols = sorted(by_symbol.values(), key=lambda x: x["symbol"])
+    for group in symbols:
+        group["win_rate"] = (group["wins"] / group["count"] * 100) if group["count"] else 0.0
+    return jsonify({
+        "ok": True, "period": period, "period_label": label, "count": len(pnls),
+        "wins": len(wins), "losses": len(losses),
+        "win_rate": (len(wins) / len(pnls) * 100) if pnls else 0.0,
+        "net_pnl": net, "gross_profit": gross_profit, "gross_loss": gross_loss,
+        "profit_factor": (gross_profit / gross_loss) if gross_loss else (None if not gross_profit else None),
+        "average_win": (sum(wins) / len(wins)) if wins else 0.0,
+        "average_loss": (abs(sum(losses)) / len(losses)) if losses else 0.0,
+        "max_drawdown": max_dd, "equity": equity, "symbols": symbols
+    })
 
 
 @app.route("/api/candles")
